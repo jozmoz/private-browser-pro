@@ -56,6 +56,15 @@ function ensureDataDir() {
   if (!fs.existsSync(STEALTH_CACHE_DIR)) fs.mkdirSync(STEALTH_CACHE_DIR, { recursive: true });
 }
 
+const UGC_RELEASE_API = 'https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest';
+const UA_CHROME_VERSION = '130.0.0.0';
+const UA_FULL_VERSION = '130.0.6723.116';
+const UA_BRANDS = [
+  { brand: 'Chromium', version: '130' },
+  { brand: 'Not?A_Brand', version: '24' },
+  { brand: 'Google Chrome', version: '130' }
+];
+
 /* ==================== Anti-Detect Presets & Fingerprint Engine ==================== */
 
 const GPU_PRESETS = [
