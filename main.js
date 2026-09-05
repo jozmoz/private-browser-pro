@@ -1242,11 +1242,20 @@ async function launchProfile(profile) {
   try {
     fs.mkdirSync(extDir, { recursive: true });
 
+    // Copy application icon to extension folder
+    const appIconSrc = fs.existsSync(path.join(__dirname, 'build', 'icon.ico'))
+      ? path.join(__dirname, 'build', 'icon.ico')
+      : (fs.existsSync(path.join(__dirname, 'jozmoz.ico')) ? path.join(__dirname, 'jozmoz.ico') : null);
+    if (appIconSrc) {
+      try { fs.copyFileSync(appIconSrc, path.join(extDir, 'icon.ico')); } catch (_) {}
+    }
+
     const newtabHtml = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
-  <title>Privacy Shield - Start Page</title>
+  <title>${profile.name || 'Private Browser'} - Start Page</title>
+  <link rel="icon" type="image/x-icon" href="icon.ico">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -1355,11 +1364,14 @@ async function launchProfile(profile) {
 </head>
 <body>
   <div class="container">
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px;">
+      <img src="icon.ico" alt="Logo" style="width:42px;height:42px;border-radius:10px;object-fit:contain;">
+      <h1 style="margin:0;">${profile.name || 'Private Browser'}</h1>
+    </div>
     <div class="badge-row">
       <span class="badge">🛡️ Privacy Shield Protection</span>
       <span class="badge badge-mode">${isPersistent ? '💾 Persistent Storage' : '⚡ Incognito (Ephemeral)'}</span>
     </div>
-    <h1>${profile.name || 'Private Browser'}</h1>
     <p class="subtitle">Isolated fingerprint, network tunnel, and anti-detect spoofing active.</p>
     <form class="search-box" onsubmit="event.preventDefault(); const q = document.getElementById('searchInp').value.trim(); if(q) location.href = (q.startsWith('http') ? q : 'https://duckduckgo.com/?q=' + encodeURIComponent(q));">
       <input id="searchInp" type="text" placeholder="Search the web or enter URL..." autofocus>
@@ -1404,8 +1416,16 @@ async function launchProfile(profile) {
 
     const manifestContent = JSON.stringify({
       manifest_version: 3,
-      name: 'Privacy Shield Core',
+      name: 'Private Browser Core',
       version: '2.0.0',
+      icons: {
+        "16": "icon.ico",
+        "48": "icon.ico",
+        "128": "icon.ico"
+      },
+      action: {
+        default_icon: "icon.ico"
+      },
       chrome_url_overrides: {
         newtab: 'newtab.html'
       },
@@ -1493,7 +1513,8 @@ async function launchProfile(profile) {
     ...PRIVATE_FLAGS,
     `--user-data-dir=${dir}`,
     `--load-extension=${extDir}`,
-    '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'
+    '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+    '--app-user-model-id=com.jozmoz.privatebrowser'
   ];
 
   if (!hasProxy) {
