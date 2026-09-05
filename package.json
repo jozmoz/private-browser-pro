@@ -4,7 +4,9 @@
   "description": "Professional Anti-Detect Browser Manager with isolated fingerprint spoofing, zero-data ephemeral sessions, and proxy tunneling.",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:portable": "electron-builder --win portable"
   },
   "keywords": [
     "anti-detect",
@@ -18,6 +20,32 @@
   ],
   "author": "",
   "license": "MIT",
+  "build": {
+    "appId": "com.jozmoz.privatebrowser",
+    "productName": "Private Browser Pro",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "files": [
+      "**/*",
+      "!data/chromium/**",
+      "!data/.sessions/**",
+      "!data/profiles_storage/**",
+      "!data/.stealth-cache/**"
+    ]
+  },
   "devDependencies": {
     "electron": "^33.0.0"
   },
