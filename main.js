@@ -10,36 +10,46 @@ const path = require('path');
 
 const APP_NAME = 'Private Browser Pro';
 
-let userDataPath = path.join(__dirname, 'data');
-try {
-  if (app && typeof app.getPath === 'function' && typeof app.isReady === 'function' && app.isReady()) {
-    userDataPath = app.getPath('userData');
+function resolveDataDir() {
+  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    return path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'data');
   }
-} catch (_) {}
-const USER_DATA_DIR = userDataPath;
-const LEGACY_DATA_DIR = path.join(__dirname, 'data');
-const LEGACY_DATA_ACTIVE = fs.existsSync(path.join(LEGACY_DATA_DIR, 'profiles.json'));
+  const isPackaged = (app && app.isPackaged) || __dirname.includes('.asar');
+  if (isPackaged) {
+    try {
+      if (app && typeof app.getPath === 'function') {
+        return app.getPath('userData');
+      }
+    } catch (_) {}
+    return path.join(os.homedir(), 'AppData', 'Roaming', 'Private Browser Pro');
+  }
+  return path.join(__dirname, 'data');
+}
 
-const DATA_DIR = LEGACY_DATA_ACTIVE ? LEGACY_DATA_DIR : USER_DATA_DIR;
-const PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
-const SESSIONS_DIR = path.join(DATA_DIR, '.sessions');
-const LEGACY_PROFILES_DIR = path.join(DATA_DIR, 'profiles');
-const PROFILES_STORAGE_DIR = path.join(DATA_DIR, 'profiles_storage');
-const CHROMIUM_DIR = path.join(DATA_DIR, 'chromium');
-const CHROMIUM_EXE = path.join(CHROMIUM_DIR, 'chrome.exe');
-const CHROMIUM_VERSION_FILE = path.join(CHROMIUM_DIR, 'version.txt');
-const STEALTH_CACHE_DIR = path.join(DATA_DIR, '.stealth-cache');
+let DATA_DIR = resolveDataDir();
+let PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
+let SESSIONS_DIR = path.join(DATA_DIR, '.sessions');
+let LEGACY_PROFILES_DIR = path.join(DATA_DIR, 'profiles');
+let PROFILES_STORAGE_DIR = path.join(DATA_DIR, 'profiles_storage');
+let CHROMIUM_DIR = path.join(DATA_DIR, 'chromium');
+let CHROMIUM_EXE = path.join(CHROMIUM_DIR, 'chrome.exe');
+let CHROMIUM_VERSION_FILE = path.join(CHROMIUM_DIR, 'version.txt');
+let STEALTH_CACHE_DIR = path.join(DATA_DIR, '.stealth-cache');
 
-const UGC_RELEASE_API = 'https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest';
-const UGC_DIRECT_URL = 'https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/151.0.7922.173-1.1/ungoogled-chromium_151.0.7922.173-1.1_windows_x64.zip';
-const UA_CHROME_VERSION = '151.0.0.0';
-const UA_FULL_VERSION = '151.0.7922.173';
-const UA_BRANDS = [
-  { brand: 'Chromium', version: '151' },
-  { brand: 'Not A;Brand', version: '24' }
-];
+function refreshPaths() {
+  DATA_DIR = resolveDataDir();
+  PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
+  SESSIONS_DIR = path.join(DATA_DIR, '.sessions');
+  LEGACY_PROFILES_DIR = path.join(DATA_DIR, 'profiles');
+  PROFILES_STORAGE_DIR = path.join(DATA_DIR, 'profiles_storage');
+  CHROMIUM_DIR = path.join(DATA_DIR, 'chromium');
+  CHROMIUM_EXE = path.join(CHROMIUM_DIR, 'chrome.exe');
+  CHROMIUM_VERSION_FILE = path.join(CHROMIUM_DIR, 'version.txt');
+  STEALTH_CACHE_DIR = path.join(DATA_DIR, '.stealth-cache');
+}
 
 function ensureDataDir() {
+  refreshPaths();
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
   if (!fs.existsSync(PROFILES_STORAGE_DIR)) fs.mkdirSync(PROFILES_STORAGE_DIR, { recursive: true });
@@ -1243,9 +1253,13 @@ async function launchProfile(profile) {
     fs.mkdirSync(extDir, { recursive: true });
 
     // Copy application icon to extension folder
-    const appIconSrc = fs.existsSync(path.join(__dirname, 'build', 'icon.ico'))
-      ? path.join(__dirname, 'build', 'icon.ico')
-      : (fs.existsSync(path.join(__dirname, 'jozmoz.ico')) ? path.join(__dirname, 'jozmoz.ico') : null);
+    const appIconCandidates = [
+      path.join(__dirname, 'assets', 'icon.ico'),
+      path.join(__dirname, 'build', 'icon.ico'),
+      path.join(__dirname, 'jozmoz.ico'),
+      path.join(__dirname, 'assets', 'icon.png')
+    ];
+    const appIconSrc = appIconCandidates.find(p => fs.existsSync(p));
     if (appIconSrc) {
       try { fs.copyFileSync(appIconSrc, path.join(extDir, 'icon.ico')); } catch (_) {}
     }
@@ -1839,7 +1853,11 @@ async function downloadChromium(progressCb, force = false) {
     if (!inner) throw new Error('فایل اجرایی کرومیوم در بسته دانلودشده پیدا نشد');
 
     try { if (fs.existsSync(CHROMIUM_DIR)) fs.rmSync(CHROMIUM_DIR, { recursive: true, force: true }); } catch {}
-    fs.renameSync(inner, CHROMIUM_DIR);
+    try {
+      fs.renameSync(inner, CHROMIUM_DIR);
+    } catch (_) {
+      fs.cpSync(inner, CHROMIUM_DIR, { recursive: true, force: true });
+    }
     if (version) {
       try { fs.writeFileSync(CHROMIUM_VERSION_FILE, version, 'utf8'); } catch {}
     }
@@ -1855,12 +1873,18 @@ async function downloadChromium(progressCb, force = false) {
 }
 
 function createWindow() {
+  const assetIcoCandidate = path.join(__dirname, 'assets', 'icon.ico');
+  const assetPngCandidate = path.join(__dirname, 'assets', 'icon.png');
   const iconCandidate = path.join(__dirname, 'build', 'icon.ico');
   const pngCandidate = path.join(__dirname, 'build', 'icon.png');
   const rootIconCandidate = path.join(__dirname, 'icon.ico');
   const jozmozCandidate = path.join(__dirname, 'jozmoz.ico');
   let appIcon;
-  if (fs.existsSync(iconCandidate)) {
+  if (fs.existsSync(assetIcoCandidate)) {
+    appIcon = assetIcoCandidate;
+  } else if (fs.existsSync(assetPngCandidate)) {
+    appIcon = assetPngCandidate;
+  } else if (fs.existsSync(iconCandidate)) {
     appIcon = iconCandidate;
   } else if (fs.existsSync(jozmozCandidate)) {
     appIcon = jozmozCandidate;
