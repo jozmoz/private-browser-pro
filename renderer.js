@@ -1249,19 +1249,20 @@
 
     if (dlBtn) {
       dlBtn.classList.remove('attention');
+      var isEn = currentLang === 'en';
       if (state.downloading) {
         dlBtn.disabled = true;
-        dlBtn.textContent = '⏳ در حال دانلود…';
+        dlBtn.textContent = isEn ? '⏳ Downloading…' : '⏳ در حال دانلود…';
       } else if (s.found && s.isDownloadedChromium) {
         dlBtn.disabled = true;
-        dlBtn.textContent = '✓ کرومیوم پرتابل آماده است';
+        dlBtn.textContent = isEn ? '✓ Portable Engine Ready' : '✓ موتور پرتابل آماده است';
       } else if (s.found) {
         dlBtn.disabled = false;
-        dlBtn.textContent = '⬇ دانلود کرومیوم داخلی (اختیاری)';
+        dlBtn.textContent = isEn ? '⬇ Download Internal Engine (Optional)' : '⬇ دانلود کرومیوم داخلی (اختیاری)';
       } else {
         dlBtn.disabled = false;
         dlBtn.classList.add('attention');
-        dlBtn.textContent = '⬇ دانلود کرومیوم';
+        dlBtn.textContent = isEn ? '⬇ Download Browser Engine' : '⬇ دانلود مرورگر';
       }
     }
 
@@ -1280,7 +1281,7 @@
     if (bar) bar.style.width = p + '%';
     if (role) role.setAttribute('aria-valuenow', String(Math.round(p)));
     if (lab && typeof label === 'string') lab.textContent = label;
-    if (pct) pct.textContent = toFaDigits(Math.round(p)) + '٪';
+    if (pct) pct.textContent = (currentLang === 'en' ? String(Math.round(p)) : toFaDigits(Math.round(p))) + '٪';
   }
 
   function hideProgress() {
@@ -1290,9 +1291,15 @@
 
   function statusTextFor(st) {
     if (!st) return '';
-    if (st.status === 'resolving') return 'در حال یافتن آخرین نسخه کرومیوم…';
-    if (st.status === 'downloading') return 'در حال دانلود کرومیوم… ' + toFaDigits(st.percent || 0) + '٪';
-    if (st.status === 'extracting') return 'در حال استخراج و آماده‌سازی فایل‌ها…';
+    var isEn = currentLang === 'en';
+    if (st.status === 'resolving') return isEn ? 'Connecting to download mirror…' : 'در حال اتصال به سرور دانلود…';
+    if (st.status === 'downloading') {
+      var pct = st.percent || 0;
+      return isEn
+        ? ('Downloading browser engine… ' + pct + '%')
+        : ('در حال دانلود کرومیوم… ' + toFaDigits(pct) + '٪');
+    }
+    if (st.status === 'extracting') return isEn ? 'Extracting and setting up files…' : 'در حال استخراج و آماده‌سازی فایل‌ها…';
     return '';
   }
 
@@ -1301,8 +1308,9 @@
     if (!a || state.downloading) return;
     state.downloading = true;
     renderChromiumStatus();
-    setProgress(0, 'شروع دانلود…');
-    toast('دانلود نسخه کرومیوم آغاز شد.', 'info');
+    var isEn = currentLang === 'en';
+    setProgress(0, isEn ? 'Starting download…' : 'شروع دانلود…');
+    toast(isEn ? 'Browser engine download started.' : 'دانلود نسخه کرومیوم آغاز شد.', 'info');
 
     var unsub = null;
     try {
@@ -1318,12 +1326,12 @@
         state.downloading = false;
         if (typeof unsub === 'function') { try { unsub(); } catch (_) {} }
         if (res && res.ok) {
-          setProgress(100, 'دانلود کامل شد.');
-          toast('کرومیوم با موفقیت نصب شد.', 'success');
+          setProgress(100, isEn ? 'Download complete.' : 'دانلود کامل شد.');
+          toast(isEn ? 'Browser engine installed successfully.' : 'کرومیوم با موفقیت نصب شد.', 'success');
           setTimeout(hideProgress, 2500);
         } else {
           hideProgress();
-          toast('دانلود ناموفق بود: ' + errMsg(res && res.error), 'error');
+          toast((isEn ? 'Download failed: ' : 'دانلود ناموفق بود: ') + errMsg(res && res.error), 'error');
         }
         return refreshChromiumStatus();
       })
@@ -1331,7 +1339,7 @@
         state.downloading = false;
         if (typeof unsub === 'function') { try { unsub(); } catch (_) {} }
         hideProgress();
-        toast('خطا در دانلود کرومیوم: ' + errMsg(err), 'error');
+        toast((isEn ? 'Download error: ' : 'خطا در دانلود کرومیوم: ') + errMsg(err), 'error');
         renderChromiumStatus();
       });
   }

@@ -1722,11 +1722,13 @@ function fetchText(url, redirects = 0) {
 
 function downloadFile(url, dest, progressCb, redirects = 0) {
   return new Promise((resolve, reject) => {
-    if (redirects > 5) return reject(new Error('تغییر مسیر بیش از حد'));
-    try { if (fs.existsSync(dest)) fs.rmSync(dest, { force: true }); } catch {}
+    if (redirects > 8) return reject(new Error('تغییر مسیر بیش از حد'));
+    try { if (fs.existsSync(dest) && redirects === 0) fs.rmSync(dest, { force: true }); } catch {}
     const parsed = new URL(url);
+    const transport = parsed.protocol === 'http:' ? http : https;
     const options = {
       hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
       path: parsed.pathname + parsed.search,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
@@ -1734,10 +1736,11 @@ function downloadFile(url, dest, progressCb, redirects = 0) {
       },
       timeout: 45000
     };
-    const req = https.get(options, (res) => {
+    const req = transport.get(options, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        return resolve(downloadFile(res.headers.location, dest, progressCb, redirects + 1));
+        const nextUrl = new URL(res.headers.location, url).href;
+        return resolve(downloadFile(nextUrl, dest, progressCb, redirects + 1));
       }
       if (res.statusCode !== 200) {
         res.resume();
@@ -1754,14 +1757,19 @@ function downloadFile(url, dest, progressCb, redirects = 0) {
       };
       res.on('data', (chunk) => {
         done += chunk.length;
-        if (total > 0) progressCb({ status: 'downloading', percent: Math.round((done / total) * 100) });
+        if (total > 0) {
+          progressCb({ status: 'downloading', percent: Math.round((done / total) * 100) });
+        } else {
+          const mb = Math.min(95, Math.round(done / (1024 * 1024)));
+          progressCb({ status: 'downloading', percent: mb });
+        }
       });
       res.on('error', fail);
       ws.on('error', fail);
       ws.on('finish', () => resolve());
       res.pipe(ws);
     });
-    req.on('timeout', () => req.destroy(new Error('اتمام مهلت اتصال')));
+    req.on('timeout', () => req.destroy(new Error('اتمام مهلت اتصال به سرور دانلود')));
     req.on('error', (err) => {
       try { if (fs.existsSync(dest)) fs.rmSync(dest, { force: true }); } catch {}
       reject(err);
@@ -1800,31 +1808,45 @@ async function downloadChromium(progressCb, force = false) {
   const tmpDir = path.join(DATA_DIR, '.chromium-extract');
   try {
     progressCb({ status: 'resolving', percent: 0 });
-    let zipUrl = '';
-    let version = '';
+    let version = UA_FULL_VERSION;
 
-    // 1. Try Ungoogled Chromium official Windows x64 release
+    const candidateUrls = [
+      'https://github.com/ungoogled-software/ungoogled-chromium-windows/releases/download/151.0.7922.173-1/ungoogled-chromium_151.0.7922.173-1_windows_x64.zip',
+      'https://downloads.sourceforge.net/project/ungoogled-chromium-win.mirror/151.0.7922.173-1/ungoogled-chromium_151.0.7922.173-1_windows_x64.zip',
+      'https://download-chromium.appspot.com/dl/Win_x64?type=snapshots'
+    ];
+
     try {
       const releaseJson = await fetchText(UGC_RELEASE_API);
       const releaseData = JSON.parse(releaseJson);
-      version = releaseData.tag_name || UA_FULL_VERSION;
+      if (releaseData.tag_name) version = releaseData.tag_name;
       const x64Asset = (releaseData.assets || []).find((a) =>
         a && a.name && (a.name.endsWith('_windows_x64.zip') || (a.name.includes('x64') && a.name.endsWith('.zip')))
       );
       if (x64Asset && x64Asset.browser_download_url) {
-        zipUrl = x64Asset.browser_download_url;
+        candidateUrls.unshift(x64Asset.browser_download_url);
       }
-    } catch (ugcErr) {
-      console.warn('Ungoogled Chromium API request failed, falling back to direct release:', ugcErr.message);
+    } catch (_) {}
+
+    let downloadSuccess = false;
+    let lastError = null;
+
+    for (const url of candidateUrls) {
+      try {
+        await downloadFile(url, tmpZip, progressCb);
+        if (fs.existsSync(tmpZip) && fs.statSync(tmpZip).size > 1000000) {
+          downloadSuccess = true;
+          break;
+        }
+      } catch (dlErr) {
+        lastError = dlErr;
+        try { if (fs.existsSync(tmpZip)) fs.rmSync(tmpZip, { force: true }); } catch (_) {}
+      }
     }
 
-    // 2. Fallback to direct official Ungoogled Chromium release
-    if (!zipUrl) {
-      zipUrl = UGC_DIRECT_URL;
-      version = UA_FULL_VERSION;
+    if (!downloadSuccess) {
+      throw lastError || new Error('امکان برقراری ارتباط با سرورهای دانلود وجود نداشت. لطفاً اتصال اینترنت یا فیلترشکن را بررسی کنید.');
     }
-
-    await downloadFile(zipUrl, tmpZip, progressCb);
 
     progressCb({ status: 'extracting', percent: 100 });
     try { if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
