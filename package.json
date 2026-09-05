@@ -1,0 +1,27 @@
+{
+  "name": "private-browser-pro",
+  "version": "1.0.0",
+  "description": "Professional Anti-Detect Browser Manager with isolated fingerprint spoofing, zero-data ephemeral sessions, and proxy tunneling.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [
+    "anti-detect",
+    "browser-fingerprint",
+    "chromium",
+    "privacy-browser",
+    "electron",
+    "stealth",
+    "proxy-tunnel",
+    "zero-data"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

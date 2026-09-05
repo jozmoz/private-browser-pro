@@ -1,0 +1,37 @@
+[
+  {
+    "id": "profile-default-01",
+    "name": "Default Profile",
+    "color": "#38bdf8",
+    "startupUrl": "",
+    "createdAt": 1757053800000,
+    "lastLaunched": null,
+    "proxy": null,
+    "saveData": true,
+    "tags": [
+      "General"
+    ],
+    "notes": "",
+    "fingerprint": {
+      "os": "windows",
+      "platform": "Win32",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+      "hardwareConcurrency": 16,
+      "deviceMemory": 16,
+      "screenWidth": 1920,
+      "screenHeight": 1080,
+      "webglVendor": "Google Inc. (NVIDIA)",
+      "webglRenderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "webglGpuName": "NVIDIA GeForce RTX 4070",
+      "canvasNoise": true,
+      "audioNoise": true,
+      "webglNoise": true,
+      "captchaSafe": true,
+      "webrtcPolicy": "disable_non_proxied_udp",
+      "timezone": "America/New_York",
+      "timezoneOffset": 240,
+      "language": "en-US",
+      "seed": 748291
+    }
+  }
+]

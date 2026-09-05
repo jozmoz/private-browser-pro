@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:;">
+<title>Private Browser Pro — Anti-Detect & Isolated Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="app-header">
+    <div class="title-block">
+      <span class="logo" aria-hidden="true">⚡</span>
+      <div class="title-text">
+        <h1 id="appTitle" data-i18n="appTitle">Private Browser Pro</h1>
+        <p id="appSubtitle" class="subtitle" data-i18n="appSubtitle">Dedicated Digital Identity (Anti-Detect) • Zero-Data & Persistent Privacy Engine</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" id="btnLangToggle" class="btn btn-secondary btn-sm" title="Switch Language / تغییر زبان">🌐 فارسی</button>
+      <span id="chromiumStatus" class="status-badge status-checking" role="status" aria-live="polite">Checking browser…</span>
+      <button type="button" id="btnWipeAll" class="btn btn-danger-soft" data-i18n="wipeAllBtn" title="Clean all temporary sessions and leftover folders">🧹 Clean All Sessions</button>
+      <button type="button" id="btnDataFolder" class="btn btn-secondary" data-i18n="dataFolderBtn" title="Show data folder in explorer">Data Folder</button>
+      <button type="button" id="btnDownloadChromium" class="btn btn-primary" data-i18n="downloadChromiumBtn" title="Download portable Chromium">Download Browser</button>
+    </div>
+  </header>
+
+  <div id="noBrowserBanner" class="banner banner-warning" hidden>
+    <span class="banner-icon" aria-hidden="true">⚠</span>
+    <p class="banner-text" data-i18n="noBrowserBanner">No browser found on the system. Download Chromium or install Edge/Chrome to launch profiles.</p>
+    <div class="banner-actions">
+      <button type="button" id="btnBannerDownload" class="btn btn-primary btn-sm" data-i18n="downloadChromiumBtn">Download Browser</button>
+      <button type="button" id="btnBannerDismiss" class="btn btn-ghost btn-sm" data-i18n="dismiss">Dismiss</button>
+    </div>
+  </div>
+
+  <div id="downloadBarWrap" class="download-bar" hidden aria-live="polite">
+    <span class="download-icon" aria-hidden="true">⬇</span>
+    <div class="download-info">
+      <span id="downloadLabel" class="download-label" data-i18n="downloadPreparing">Preparing download…</span>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="downloadProgressRole">
+        <div id="downloadProgressBar" class="progress-bar" style="width: 0%"></div>
+      </div>
+    </div>
+    <span id="downloadPercent" class="download-percent">0%</span>
+  </div>
+
+  <div id="statusBar" class="status-bar">
+    <span class="status-item"><span id="lblBrowserEngine" data-i18n="browserEngine">Engine:</span> <span id="chromiumPath" class="mono" dir="ltr">Chromium</span></span>
+    <span class="status-sep" aria-hidden="true">•</span>
+    <span class="status-item"><span id="lblExecMode" data-i18n="execMode">Mode:</span> <span class="badge-zero" data-i18n="execZeroData">🔒 100% Zero-Data Ephemeral</span></span>
+    <span class="status-sep" aria-hidden="true">•</span>
+    <span class="status-item"><span id="lblRunningCount" data-i18n="runningCount">Active:</span> <span id="activeCount">0</span></span>
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="searchInput" class="search" data-i18n="searchPlaceholder" placeholder="Search profile name, tags, or hardware identity..." autocomplete="off">
+    <span id="profilesCount" class="count"></span>
+  </div>
+  <div id="tagsFilterBar" class="tags-filter-bar" hidden>
+    <span class="tags-filter-label" data-i18n="filterByTag">🏷️ Filter by Tag:</span>
+    <div id="tagsFilterList" class="tags-filter-list"></div>
+  </div>
+
+  <main class="main">
+    <div id="emptyState" class="empty-state" hidden>
+      <div class="empty-icon" aria-hidden="true">🛡️</div>
+      <h2 data-i18n="emptyTitle">No browser profiles yet</h2>
+      <p data-i18n="emptyDesc">Create your first private profile. Each browser has a dedicated digital identity and preserves your logins & history.</p>
+      <button type="button" id="btnEmptyNew" class="btn btn-primary" data-i18n="emptyBtn">Create First Profile</button>
+    </div>
+
+    <div id="profileGrid" class="grid" aria-live="polite" aria-label="Profiles list">
+      <button type="button" id="newProfileCard" class="card new-card" title="Create new profile">
+        <span class="new-plus" aria-hidden="true">＋</span>
+        <span class="new-title" data-i18n="newCardTitle">New Profile</span>
+        <span class="new-desc" data-i18n="newCardDesc">Create an isolated browser identity</span>
+      </button>
+    </div>
+
+    <div id="noResults" class="no-results" hidden>
+      <div class="no-results-title" data-i18n="noResTitle">No profiles found</div>
+      <div class="no-results-desc" data-i18n="noResDesc">Try searching for another name, tag, or GPU spec.</div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <span id="footerCredit" data-i18n="footerCredit">Private Browser Pro | Anti-Detect & Zero-Data</span>
+  </footer>
+</div>
+
+<!-- Profile Card Template -->
+<template id="profileCardTemplate">
+  <article class="card profile-card">
+    <div class="card-top">
+      <span class="color-dot" aria-hidden="true"></span>
+      <h3 class="profile-name"></h3>
+      <span class="pill pill-active" data-active-badge hidden>● Active</span>
+      <button type="button" class="card-top-delete" data-action="delete" title="Delete Profile" aria-label="Delete">✕</button>
+    </div>
+
+    <div class="card-tags" data-card-tags></div>
+
+    <!-- Fingerprint Chips -->
+    <div class="fp-chips">
+      <span class="chip chip-os" data-chip="os">💻 Windows</span>
+      <span class="chip chip-tz" data-chip="tz">🌍 New York</span>
+      <span class="chip chip-gpu" data-chip="gpu">🎮 RTX 4070</span>
+      <span class="chip chip-hw" data-chip="hw">⚡ 8 Cores / 16GB</span>
+      <span class="chip chip-stealth" title="Canvas, WebGL, and Audio noise active">🛡️ Anti-Detect Active</span>
+      <span class="chip chip-mode chip-persistent" data-chip="mode" title="Storage status">💾 Persistent</span>
+      <span class="chip chip-proxy" data-chip="proxy" hidden>🌐 Proxy</span>
+    </div>
+
+    <p class="card-notes" data-card-notes hidden></p>
+    <p class="startup-url" dir="ltr" hidden></p>
+    <p class="last-launched"></p>
+
+    <div class="card-actions">
+      <button type="button" class="btn btn-primary btn-block" data-action="launch">▶ Launch Profile</button>
+      <button type="button" class="btn btn-danger btn-block" data-action="stop" hidden>⏹ Stop Browser</button>
+      <div class="card-row">
+        <button type="button" class="btn btn-secondary btn-sm" data-action="clone" title="Clone profile with fresh identity">📋 Clone</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-action="edit" title="Edit settings and fingerprint">✎ Edit</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-action="randomize" title="Generate fresh random identity">🎲 New Identity</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-action="wipe" title="Wipe stored data for this profile">🧹 Wipe</button>
+        <button type="button" class="btn btn-danger btn-sm" data-action="delete" title="Delete profile">🗑 Delete</button>
+      </div>
+    </div>
+  </article>
+</template>
+
+<!-- Profile Modal -->
+<div id="profileModal" class="modal-backdrop" hidden>
+  <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle">
+    <div class="modal-head">
+      <div class="modal-head-title">
+        <span class="modal-icon">🛡️</span>
+        <h2 id="profileModalTitle" data-i18n="createTitle">Create New Profile</h2>
+      </div>
+      <button type="button" id="profileModalClose" class="icon-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <form id="profileForm" novalidate>
+      <input type="hidden" id="editingProfileId" value="">
+
+      <!-- Section 1: General Info -->
+      <div class="form-section">
+        <div class="section-title" data-i18n="secGeneral">1. General Information</div>
+        <div class="field">
+          <label for="profileName" data-i18n="lblProfileName">Profile Name</label>
+          <input type="text" id="profileName" name="name" maxlength="60" required autocomplete="off" data-i18n="placeholderName" placeholder="e.g.: Main Account, Trading, Telegram, Work">
+          <span class="hint"><span id="nameCounter">0 / 60</span> — <span data-i18n="maxChars">max 60 characters</span></span>
+        </div>
+
+        <fieldset class="field">
+          <legend data-i18n="lblColorTag">Color Tag</legend>
+          <div id="colorChoices" class="color-choices" role="radiogroup" aria-label="Profile color">
+            <label class="color-option" title="Blue"><input type="radio" name="color" value="#4f8cff" checked><span class="swatch" style="background:#4f8cff" aria-hidden="true"></span><span class="sr-only">Blue</span></label>
+            <label class="color-option" title="Green"><input type="radio" name="color" value="#22c55e"><span class="swatch" style="background:#22c55e" aria-hidden="true"></span><span class="sr-only">Green</span></label>
+            <label class="color-option" title="Orange"><input type="radio" name="color" value="#f59e0b"><span class="swatch" style="background:#f59e0b" aria-hidden="true"></span><span class="sr-only">Orange</span></label>
+            <label class="color-option" title="Red"><input type="radio" name="color" value="#ef4444"><span class="swatch" style="background:#ef4444" aria-hidden="true"></span><span class="sr-only">Red</span></label>
+            <label class="color-option" title="Purple"><input type="radio" name="color" value="#a78bfa"><span class="swatch" style="background:#a78bfa" aria-hidden="true"></span><span class="sr-only">Purple</span></label>
+            <label class="color-option" title="Pink"><input type="radio" name="color" value="#ec4899"><span class="swatch" style="background:#ec4899" aria-hidden="true"></span><span class="sr-only">Pink</span></label>
+            <label class="color-option" title="Teal"><input type="radio" name="color" value="#14b8a6"><span class="swatch" style="background:#14b8a6" aria-hidden="true"></span><span class="sr-only">Teal</span></label>
+            <label class="color-option" title="Yellow"><input type="radio" name="color" value="#eab308"><span class="swatch" style="background:#eab308" aria-hidden="true"></span><span class="sr-only">Yellow</span></label>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label for="startupUrl"><span data-i18n="lblStartupUrl">Startup URL</span> <span class="optional" data-i18n="lblStartupUrlOptional">(Optional - Default: Secure Start Page)</span></label>
+          <input type="text" id="startupUrl" name="startupUrl" dir="ltr" inputmode="url" autocomplete="off" placeholder="https://www.google.com">
+          <span class="hint" data-i18n="hintStartupUrl">If left empty, the secure private start page will open.</span>
+        </div>
+
+        <label class="check-item check-primary" style="margin-top: 14px; background: rgba(74, 222, 128, 0.08); border: 1px solid rgba(74, 222, 128, 0.25); padding: 12px 14px; border-radius: 10px;">
+          <input type="checkbox" id="profileSaveData" checked>
+          <span style="font-weight: 700; color: #4ade80;" data-i18n="lblSaveData">💾 Persistent Storage (History, cookies, and logins remain saved)</span>
+        </label>
+        <span class="hint" style="margin-top: -6px; margin-bottom: 8px;" data-i18n="hintSaveData">When enabled, accounts and cookies persist across sessions. When unchecked, session is 100% ephemeral and destroyed on close.</span>
+
+        <div class="field">
+          <label for="profileTags"><span data-i18n="lblTags">Tags</span> <span class="optional" data-i18n="lblTagsOptional">(Comma separated - e.g.: Crypto, Work, Social)</span></label>
+          <input type="text" id="profileTags" name="tags" data-i18n="placeholderTags" placeholder="Crypto, Social, Main">
+        </div>
+
+        <div class="field">
+          <label for="profileNotes"><span data-i18n="lblNotes">Notes & Reminders</span> <span class="optional" data-i18n="lblOptional">(Optional)</span></label>
+          <textarea id="profileNotes" name="notes" rows="2" data-i18n="placeholderNotes" placeholder="Account notes, recovery email, credentials reminder..." style="background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-xs); color: var(--text); padding: 10px 12px; font-size: 13px; width: 100%; outline: none; resize: vertical; font-family: inherit;"></textarea>
+        </div>
+      </div>
+
+      <!-- Section 2: Anti-Detect Fingerprint -->
+      <div class="form-section highlight-section">
+        <div class="section-head">
+          <div class="section-title" data-i18n="secFingerprint">2. Digital Identity & Anti-Detect Fingerprint</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button type="button" id="btnAutoDetectIp" class="btn btn-secondary btn-sm" data-i18n="btnAutoDetectIp" title="Auto-detect timezone & language based on current IP">⚡ Auto-Detect with IP</button>
+            <button type="button" id="btnSmartRandomize" class="btn btn-secondary btn-sm" data-i18n="btnSmartRandomize" title="Generate realistic random fingerprint">🎲 Smart Randomize</button>
+          </div>
+        </div>
+
+        <div class="fields-row">
+          <div class="field col-half">
+            <label for="fpOs" data-i18n="lblOs">Operating System</label>
+            <select id="fpOs" class="select-input">
+              <option value="windows">Windows (Windows 11)</option>
+              <option value="mac">macOS (macOS Sonoma)</option>
+              <option value="linux">Linux (Ubuntu 24.04)</option>
+            </select>
+          </div>
+
+          <div class="field col-half">
+            <label for="fpResolution" data-i18n="lblResolution">Monitor Resolution</label>
+            <select id="fpResolution" class="select-input">
+              <option value="1920x1080">1920 × 1080 (FHD Common)</option>
+              <option value="1536x864">1536 × 864 (Laptop)</option>
+              <option value="1440x900">1440 × 900 (MacBook)</option>
+              <option value="2560x1440">2560 × 1440 (2K QHD)</option>
+              <option value="1366x768">1366 × 768 (Standard)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="fields-row">
+          <div class="field col-half">
+            <label for="fpTimezone" data-i18n="lblTimezone">Timezone (Sync with IP / Proxy)</label>
+            <select id="fpTimezone" class="select-input">
+              <option value="system">Local System Timezone</option>
+              <option value="America/New_York" selected>United States / East (New York - GMT-5/4)</option>
+              <option value="America/Chicago">United States / Central (Chicago - GMT-6/5)</option>
+              <option value="America/Los_Angeles">United States / West (Los Angeles - GMT-8/7)</option>
+              <option value="Europe/London">United Kingdom (London - GMT+0/1)</option>
+              <option value="Europe/Berlin">Germany (Berlin / Frankfurt - GMT+1/2)</option>
+              <option value="Europe/Paris">France (Paris - GMT+1/2)</option>
+              <option value="Europe/Amsterdam">Netherlands (Amsterdam - GMT+1/2)</option>
+              <option value="Europe/Istanbul">Turkey (Istanbul - GMT+3)</option>
+              <option value="Europe/Helsinki">Finland (Helsinki - GMT+2/3)</option>
+              <option value="Asia/Dubai">UAE (Dubai - GMT+4)</option>
+              <option value="Asia/Singapore">Singapore (Singapore - GMT+8)</option>
+              <option value="Asia/Tehran">Iran (Tehran - GMT+3:30)</option>
+              <option value="UTC">Coordinated Universal Time (UTC)</option>
+            </select>
+          </div>
+
+          <div class="field col-half">
+            <label for="fpLanguage" data-i18n="lblLanguage">Browser Language</label>
+            <select id="fpLanguage" class="select-input">
+              <option value="en-US" selected>English (en-US) - International</option>
+              <option value="de-DE">Deutsch (de-DE)</option>
+              <option value="fr-FR">Français (fr-FR)</option>
+              <option value="tr-TR">Türkçe (tr-TR)</option>
+              <option value="fa-IR">فارسی (fa-IR)</option>
+              <option value="ru-RU">Русский (ru-RU)</option>
+              <option value="ar-AE">العربية (ar-AE)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="fpGpu" data-i18n="lblGpu">Graphics Card & WebGL Renderer</label>
+          <select id="fpGpu" class="select-input">
+            <optgroup label="NVIDIA GeForce (RTX 40 & 30 Series)" data-group="nvidia">
+              <option value="nvidia-rtx4090">NVIDIA GeForce RTX 4090 (Ultra Flagship)</option>
+              <option value="nvidia-rtx4080">NVIDIA GeForce RTX 4080 (High-End Gaming)</option>
+              <option value="nvidia-rtx4070" selected>NVIDIA GeForce RTX 4070 (Desktop Gaming)</option>
+              <option value="nvidia-rtx4060ti">NVIDIA GeForce RTX 4060 Ti (Modern 40-Series)</option>
+              <option value="nvidia-rtx3080">NVIDIA GeForce RTX 3080 (Desktop Gaming)</option>
+              <option value="nvidia-rtx3070">NVIDIA GeForce RTX 3070 (High Performance)</option>
+              <option value="nvidia-rtx3060">NVIDIA GeForce RTX 3060 (Popular Gaming)</option>
+              <option value="nvidia-rtx3050-lap">NVIDIA GeForce RTX 3050 Laptop (Gaming Laptop)</option>
+              <option value="nvidia-gtx1660s">NVIDIA GeForce GTX 1660 SUPER (Standard)</option>
+            </optgroup>
+            <optgroup label="AMD Radeon (RX 7000 & 6000 Series)" data-group="amd">
+              <option value="amd-rx7900xtx">AMD Radeon RX 7900 XTX (Flagship AMD)</option>
+              <option value="amd-rx7800">AMD Radeon RX 7800 XT (High-End AMD)</option>
+              <option value="amd-rx6700xt">AMD Radeon RX 6700 XT (Popular AMD)</option>
+              <option value="amd-rx6600">AMD Radeon RX 6600 (Stable AMD)</option>
+            </optgroup>
+            <optgroup label="Intel Graphics (Arc, Iris, UHD)" data-group="intel">
+              <option value="intel-arc-a770">Intel(R) Arc(TM) A770 Graphics (Dedicated Intel)</option>
+              <option value="intel-arc-a750">Intel(R) Arc(TM) A750 Graphics (Dedicated Intel)</option>
+              <option value="intel-iris-xe">Intel(R) Iris(R) Xe Graphics (Integrated Laptop)</option>
+              <option value="intel-uhd-770">Intel(R) UHD Graphics 770 (Core 12/13/14th Gen)</option>
+            </optgroup>
+            <optgroup label="Apple Silicon (M3, M2, M1)" data-group="apple">
+              <option value="apple-m3-max">Apple M3 Max (MacBook Pro Flagship)</option>
+              <option value="apple-m3">Apple M3 Pro (MacBook Pro)</option>
+              <option value="apple-m2-pro">Apple M2 Pro (MacBook Air/Pro)</option>
+              <option value="apple-m1">Apple M1 (Mac Mini / Air)</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div class="fields-row">
+          <div class="field col-half">
+            <label for="fpCores" data-i18n="lblCores">CPU Cores</label>
+            <select id="fpCores" class="select-input">
+              <option value="4">4 Cores</option>
+              <option value="6">6 Cores</option>
+              <option value="8" selected>8 Cores (Standard)</option>
+              <option value="12">12 Cores</option>
+              <option value="16">16 Cores (Professional)</option>
+            </select>
+          </div>
+
+          <div class="field col-half">
+            <label for="fpMemory" data-i18n="lblMemory">Device Memory (RAM)</label>
+            <select id="fpMemory" class="select-input">
+              <option value="4">4 GB</option>
+              <option value="8">8 GB</option>
+              <option value="16" selected>16 GB</option>
+              <option value="32">32 GB</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="checkbox-grid">
+          <label class="check-item" style="grid-column: span 2; font-weight: 700; color: #38bdf8;">
+            <input type="checkbox" id="fpCaptchaSafe" checked>
+            <span data-i18n="chkCaptchaSafe">🛡️ Cloudflare Turnstile & Captcha Safe Compatibility</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" id="fpCanvasNoise" checked>
+            <span data-i18n="chkCanvasNoise">Canvas Noise Protection</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" id="fpAudioNoise" checked>
+            <span data-i18n="chkAudioNoise">AudioContext Noise Protection</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" id="fpWebglNoise" checked>
+            <span data-i18n="chkWebglNoise">WebGL Buffer Emulation</span>
+          </label>
+          <label class="check-item">
+            <input type="checkbox" id="fpWebrtcProtection" checked>
+            <span data-i18n="chkWebrtcProtection">WebRTC IP Leak Protection</span>
+          </label>
+          <label class="check-item" style="grid-column: span 2; font-weight: 600; color: #10b981;">
+            <input type="checkbox" id="fpDnsProtection" checked>
+            <span data-i18n="chkDnsProtection">🔒 DNS Leak Protection & Secure DoH</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Section 3: Proxy Settings -->
+      <div class="form-section">
+        <div class="section-title" data-i18n="secProxy">3. Proxy Settings (Optional)</div>
+        <label class="check-item check-primary">
+          <input type="checkbox" id="proxyEnabled">
+          <span data-i18n="chkProxyEnabled">Use dedicated proxy for this browser</span>
+        </label>
+
+        <div id="proxyFieldsWrap" class="proxy-fields" hidden>
+          <div class="fields-row">
+            <div class="field col-third">
+              <label for="proxyType" data-i18n="lblProxyType">Proxy Type</label>
+              <select id="proxyType" class="select-input">
+                <option value="http">HTTP / HTTPS</option>
+                <option value="socks5">SOCKS5</option>
+              </select>
+            </div>
+            <div class="field col-twothird">
+              <label for="proxyHost" data-i18n="lblProxyHost">Host / Server IP</label>
+              <input type="text" id="proxyHost" dir="ltr" placeholder="127.0.0.1 or proxy.example.com">
+            </div>
+          </div>
+          <div class="fields-row">
+            <div class="field col-third">
+              <label for="proxyPort" data-i18n="lblProxyPort">Port</label>
+              <input type="text" id="proxyPort" dir="ltr" inputmode="numeric" placeholder="8080">
+            </div>
+            <div class="field col-third">
+              <label for="proxyUser"><span data-i18n="lblProxyUser">Username</span> <span class="optional" data-i18n="lblOptional">(Optional)</span></label>
+              <input type="text" id="proxyUser" dir="ltr" placeholder="Optional">
+            </div>
+            <div class="field col-third">
+              <label for="proxyPass"><span data-i18n="lblProxyPass">Password</span> <span class="optional" data-i18n="lblOptional">(Optional)</span></label>
+              <input type="password" id="proxyPass" dir="ltr" placeholder="Optional">
+            </div>
+          </div>
+          <div style="margin-top: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button type="button" id="btnTestProxy" class="btn btn-secondary btn-sm" data-i18n="btnTestProxy" title="Test proxy ping and connectivity">⚡ Test Proxy Connection</button>
+            <span id="proxyTestResult" class="proxy-test-badge" hidden></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Security & Storage Note -->
+      <div class="zero-data-note">
+        <span class="note-icon">🛡️</span>
+        <div class="note-text">
+          <strong data-i18n="noteTitle">Private Browser Pro Isolation & Storage:</strong>
+          <span data-i18n="noteDesc">In persistent mode, logins and cookies are isolated in dedicated profile storage. In ephemeral mode, all session data is permanently destroyed upon browser exit.</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btnDeleteProfileModal" class="btn btn-danger" style="margin-inline-end: auto;" data-i18n="deleteProfileBtn" hidden>🗑 Delete Profile</button>
+        <button type="button" id="btnCancelProfile" class="btn btn-ghost" data-i18n="cancel">Cancel</button>
+        <button type="submit" id="btnSaveProfile" class="btn btn-primary" data-i18n="saveCreate">Create Profile</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirmModal" class="modal-backdrop" hidden>
+  <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+    <div class="modal-head">
+      <h2 id="confirmTitle" data-i18n="confirm">Confirm Action</h2>
+      <button type="button" id="confirmModalClose" class="icon-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <p id="confirmMessage" class="confirm-message"></p>
+    <div class="modal-actions">
+      <button type="button" id="btnConfirmCancel" class="btn btn-ghost" data-i18n="cancel">Cancel</button>
+      <button type="button" id="btnConfirmOk" class="btn btn-danger" data-i18n="confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="renderer.js" defer></script>
+</body>
+</html>
