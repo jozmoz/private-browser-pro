@@ -1837,9 +1837,12 @@ function createWindow() {
   const iconCandidate = path.join(__dirname, 'build', 'icon.ico');
   const pngCandidate = path.join(__dirname, 'build', 'icon.png');
   const rootIconCandidate = path.join(__dirname, 'icon.ico');
+  const jozmozCandidate = path.join(__dirname, 'jozmoz.ico');
   let appIcon;
   if (fs.existsSync(iconCandidate)) {
     appIcon = iconCandidate;
+  } else if (fs.existsSync(jozmozCandidate)) {
+    appIcon = jozmozCandidate;
   } else if (fs.existsSync(pngCandidate)) {
     appIcon = pngCandidate;
   } else if (fs.existsSync(rootIconCandidate)) {

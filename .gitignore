@@ -24,7 +24,8 @@ debug.log
 # Build & packaging artifacts
 dist/
 out/
-build/
+!build/icon.ico
+!build/icon.png
 
 # Operating system files
 .DS_Store
