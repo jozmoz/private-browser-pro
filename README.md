@@ -8,6 +8,8 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-informational.svg)]()
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success.svg)]()
 
+> 🌐 **Language:** **English** | [🇮🇷 **مشاهده مستندات به زبان فارسی (Persian README)**](README_FA.md)
+
 **Private Browser Pro** is a lightweight, ultra-secure desktop application designed to manage isolated browser profiles with dedicated digital identities (anti-detect fingerprinting), zero-data ephemeral browsing sessions, and built-in proxy tunneling with DNS leak prevention.
 
 ---

@@ -8,6 +8,8 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-informational.svg)]()
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success.svg)]()
 
+> 🌐 **زبان / Language:** **🇮🇷 فارسی (Persian)** | [🇬🇧 **English Documentation**](README.md)
+
 **Private Browser Pro** یک نرم‌افزار دسکتاپ مدرن و سبک است که به شما امکان می‌دهد پروفایل‌های مرورگر کاملاً مجزا با هویت دیجیتال اختصاصی (شبیه‌سازی کارت گرافیک، بوم، صدا، مشخصات سخت‌افزاری)، حالت‌های وبگردی موقت و بدون ردپا (Zero-Data)، و تونل پروکسی اختصاصی با محافظت در برابر نشت DNS ایجاد و مدیریت کنید.
 
 ---
