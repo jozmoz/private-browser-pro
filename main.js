@@ -1834,6 +1834,18 @@ async function downloadChromium(progressCb, force = false) {
 }
 
 function createWindow() {
+  const iconCandidate = path.join(__dirname, 'build', 'icon.ico');
+  const pngCandidate = path.join(__dirname, 'build', 'icon.png');
+  const rootIconCandidate = path.join(__dirname, 'icon.ico');
+  let appIcon;
+  if (fs.existsSync(iconCandidate)) {
+    appIcon = iconCandidate;
+  } else if (fs.existsSync(pngCandidate)) {
+    appIcon = pngCandidate;
+  } else if (fs.existsSync(rootIconCandidate)) {
+    appIcon = rootIconCandidate;
+  }
+
   const win = new BrowserWindow({
     width: 1060,
     height: 740,
@@ -1842,6 +1854,7 @@ function createWindow() {
     autoHideMenuBar: true,
     title: 'Private Browser Pro — Anti-Detect & Isolated Engine',
     backgroundColor: '#0c0e12',
+    ...(appIcon ? { icon: appIcon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
