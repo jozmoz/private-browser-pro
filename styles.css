@@ -96,10 +96,25 @@ button, input { font-family: inherit; }
 .main { flex: 1; padding-top: 16px; }
 
 .app-footer {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: 12px;
   margin-top: 26px;
+  flex-wrap: wrap;
+}
+.footer-separator { color: var(--border-soft); }
+.footer-link {
+  color: #38bdf8;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+.footer-link:hover {
+  color: #7dd3fc;
+  text-decoration: underline;
 }
 
 /* ---------- Buttons ---------- */

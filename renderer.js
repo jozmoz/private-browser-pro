@@ -128,7 +128,10 @@
       runningCount: 'Active:',
       wipeAllBtn: '🧹 Clean All Sessions',
       dataFolderBtn: 'Data Folder',
-      downloadChromiumBtn: 'Download Browser',
+      contactAdminBtn: '💬 Contact Admin',
+      contactAdminLink: '💬 Support & Admin: @jozm0z',
+      downloadChromiumBtn: 'Download Browser Engine',
+      downloadRequiredBtn: '⬇ Download Browser Engine (Required)',
       searchPlaceholder: 'Search profile name, tags, or hardware identity...',
       filterByTag: '🏷️ Filter by Tag:',
       all: 'All',
@@ -168,8 +171,8 @@
       persistentChip: '💾 Persistent Data',
       ephemeralChip: '⚡ Ephemeral',
       engineReady: '● Private Browser engine is ready',
-      engineNotFound: '● Browser not found — download required',
-      noBrowserBanner: 'No browser found on the system. Download Chromium or install Edge/Chrome to launch profiles.',
+      engineNotFound: '● Dedicated browser engine not installed — download required',
+      noBrowserBanner: 'Dedicated browser engine is required. Please download it to launch profiles.',
       dismiss: 'Dismiss',
       downloadPreparing: 'Preparing download…',
       secGeneral: '1. General Information',
@@ -225,7 +228,10 @@
       runningCount: 'در حال اجرا:',
       wipeAllBtn: '🧹 پاک‌سازی همه نشست‌ها',
       dataFolderBtn: 'پوشه داده‌ها',
-      downloadChromiumBtn: 'دانلود مرورگر',
+      contactAdminBtn: '💬 ارتباط با ادمین',
+      contactAdminLink: '💬 پشتیبانی و ارتباط با ادمین: jozm0z@',
+      downloadChromiumBtn: 'دانلود موتور مرورگر',
+      downloadRequiredBtn: '⬇ دانلود موتور مرورگر (اجباری)',
       searchPlaceholder: 'جست‌وجو در نام مرورگر، تگ‌ها یا مشخصات هویت…',
       filterByTag: '🏷️ فیلتر بر اساس تگ:',
       all: 'همه',
@@ -265,8 +271,8 @@
       persistentChip: '💾 داده پایدار',
       ephemeralChip: '⚡ یک‌بار مصرف',
       engineReady: '● موتور اختصاصی مرورگر آماده است',
-      engineNotFound: '● مرورگری یافت نشد — دانلود لازم است',
-      noBrowserBanner: 'هیچ مرورگری روی سیستم پیدا نشد. برای اجرای پروفایل‌ها، کرومیوم را دانلود کنید یا اج/کروم نصب کنید.',
+      engineNotFound: '● موتور اختصاصی مرورگر نصب نیست — دانلود اجباری است',
+      noBrowserBanner: 'استفاده از پروفایل‌ها نیازمند موتور اختصاصی است. لطفاً موتور مرورگر را دانلود نمایید.',
       dismiss: 'بستن',
       downloadPreparing: 'در حال آماده‌سازی دانلود…',
       secGeneral: '۱. اطلاعات عمومی مرورگر',
@@ -1027,14 +1033,18 @@
     var dot = card.querySelector('.color-dot');
     if (dot) dot.style.background = p.color || '#4f8cff';
     var nameEl = card.querySelector('.profile-name');
-    if (nameEl) { nameEl.textContent = p.name || 'بدون نام'; nameEl.title = p.name || ''; }
+    if (nameEl) { nameEl.textContent = p.name || (currentLang === 'en' ? 'Untitled' : 'بدون نام'); nameEl.title = p.name || ''; }
 
     var isRunning = state.activeIds.indexOf(p.id) !== -1;
     var badge = card.querySelector('[data-active-badge]');
     if (badge) {
       badge.hidden = !isRunning;
       var count = state.activeCounts[p.id] || 1;
-      badge.textContent = count > 1 ? ('● فعال (' + toFaDigits(count) + ')') : '● فعال';
+      if (currentLang === 'en') {
+        badge.textContent = count > 1 ? ('● Active (' + count + ')') : '● Active';
+      } else {
+        badge.textContent = count > 1 ? ('● فعال (' + toFaDigits(count) + ')') : '● فعال';
+      }
     }
 
     // Tags
@@ -1255,14 +1265,11 @@
         dlBtn.textContent = isEn ? '⏳ Downloading…' : '⏳ در حال دانلود…';
       } else if (s.found && s.isDownloadedChromium) {
         dlBtn.disabled = true;
-        dlBtn.textContent = isEn ? '✓ Portable Engine Ready' : '✓ موتور پرتابل آماده است';
-      } else if (s.found) {
-        dlBtn.disabled = false;
-        dlBtn.textContent = isEn ? '⬇ Download Internal Engine (Optional)' : '⬇ دانلود کرومیوم داخلی (اختیاری)';
+        dlBtn.textContent = isEn ? '✓ Browser Engine Ready' : '✓ موتور مرورگر آماده است';
       } else {
         dlBtn.disabled = false;
         dlBtn.classList.add('attention');
-        dlBtn.textContent = isEn ? '⬇ Download Browser Engine' : '⬇ دانلود مرورگر';
+        dlBtn.textContent = isEn ? '⬇ Download Browser Engine (Required)' : '⬇ دانلود موتور مرورگر (اجباری)';
       }
     }
 
@@ -1362,16 +1369,18 @@
       .then(function (res) {
         delete state.launching[id];
         if (res && res.ok) {
-          toast('مرورگر با موفقیت در محیط امن و بدون داده اجرا شد.', 'success');
+          toast(currentLang === 'en' ? 'Browser launched in isolated environment.' : 'مرورگر با موفقیت در محیط امن و بدون داده اجرا شد.', 'success');
           return loadProfiles();
         }
         if (res && res.error === 'NO_BROWSER') {
-          toast('مرورگری یافت نشد. دانلود کرومیوم لازم است.', 'error');
+          toast(currentLang === 'en' ? 'Dedicated browser engine is required. Please download it first.' : 'دانلود موتور مرورگر اجباری است. ابتدا آن را دانلود نمایید.', 'error');
           renderProfiles();
-          return refreshChromiumStatus();
+          refreshChromiumStatus();
+          handleDownloadChromium();
+          return;
         }
         renderProfiles();
-        toast('اجرا ناموفق بود: ' + errMsg(res && res.error), 'error');
+        toast((currentLang === 'en' ? 'Launch failed: ' : 'اجرا ناموفق بود: ') + errMsg(res && res.error), 'error');
       })
       .catch(function (err) {
         delete state.launching[id];
@@ -1515,36 +1524,37 @@
       password: $('proxyPass').value.trim()
     };
 
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ در حال تست پینگ…'; }
+    if (btn) { btn.disabled = true; btn.textContent = currentLang === 'en' ? '⏳ Testing ping…' : '⏳ در حال تست پینگ…'; }
     if (badge) {
       badge.hidden = false;
       badge.className = 'proxy-test-badge checking';
-      badge.textContent = 'در حال تست پینگ…';
+      badge.textContent = currentLang === 'en' ? 'Testing ping…' : 'در حال تست پینگ…';
     }
 
     a.testProxy(proxyObj)
       .then(function (res) {
-        if (btn) { btn.disabled = false; btn.textContent = '⚡ تست زنده پینگ و اتصال پروکسی'; }
+        if (btn) { btn.disabled = false; btn.textContent = t('btnTestProxy'); }
         if (!badge) return;
         if (res && res.ok) {
           badge.className = 'proxy-test-badge success';
-          var txt = '✓ متصل (' + toFaDigits(res.latencyMs || 0) + 'ms)';
+          var latStr = currentLang === 'en' ? String(res.latencyMs || 0) : toFaDigits(res.latencyMs || 0);
+          var txt = (currentLang === 'en' ? '✓ Connected (' : '✓ متصل (') + latStr + 'ms)';
           if (res.country) txt += ' • ' + res.country;
           badge.textContent = txt;
-          toast('پروکسی فعال است (' + (res.latencyMs || 0) + 'ms).', 'success');
+          toast(currentLang === 'en' ? ('Proxy is active (' + (res.latencyMs || 0) + 'ms).') : ('پروکسی فعال است (' + (res.latencyMs || 0) + 'ms).'), 'success');
         } else {
           badge.className = 'proxy-test-badge error';
-          badge.textContent = '✕ ناموفق (' + (res && res.error ? res.error : 'عدم پاسخ') + ')';
-          toast('اتصال به پروکسی ناموفق بود: ' + (res && res.error ? res.error : 'تایم‌اوت'), 'error');
+          badge.textContent = (currentLang === 'en' ? '✕ Failed (' : '✕ ناموفق (') + (res && res.error ? res.error : (currentLang === 'en' ? 'No response' : 'عدم پاسخ')) + ')';
+          toast((currentLang === 'en' ? 'Proxy connection failed: ' : 'اتصال به پروکسی ناموفق بود: ') + (res && res.error ? res.error : (currentLang === 'en' ? 'Timeout' : 'تایم‌اوت')), 'error');
         }
       })
       .catch(function (err) {
-        if (btn) { btn.disabled = false; btn.textContent = '⚡ تست زنده پینگ و اتصال پروکسی'; }
+        if (btn) { btn.disabled = false; btn.textContent = t('btnTestProxy'); }
         if (badge) {
           badge.className = 'proxy-test-badge error';
-          badge.textContent = '✕ خطای شبکه';
+          badge.textContent = currentLang === 'en' ? '✕ Network error' : '✕ خطای شبکه';
         }
-        toast('خطا در بررسی پروکسی: ' + errMsg(err), 'error');
+        toast((currentLang === 'en' ? 'Proxy check error: ' : 'خطا در بررسی پروکسی: ') + errMsg(err), 'error');
       });
   }
 
@@ -1659,6 +1669,25 @@
 
     var btnTestProxy = $('btnTestProxy');
     if (btnTestProxy) btnTestProxy.addEventListener('click', handleTestProxy);
+
+    var btnAdmin = $('btnContactAdmin');
+    if (btnAdmin) {
+      btnAdmin.addEventListener('click', function () {
+        var a = api();
+        if (a && typeof a.openExternal === 'function') a.openExternal('https://t.me/jozm0z');
+        else window.open('https://t.me/jozm0z', '_blank');
+      });
+    }
+
+    var linkAdmin = $('linkContactAdmin');
+    if (linkAdmin) {
+      linkAdmin.addEventListener('click', function (e) {
+        e.preventDefault();
+        var a = api();
+        if (a && typeof a.openExternal === 'function') a.openExternal('https://t.me/jozm0z');
+        else window.open('https://t.me/jozm0z', '_blank');
+      });
+    }
 
     var btnData = $('btnDataFolder');
     if (btnData) btnData.addEventListener('click', handleOpenDataFolder);

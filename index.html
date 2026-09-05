@@ -27,13 +27,14 @@
       <span id="chromiumStatus" class="status-badge status-checking" role="status" aria-live="polite">Checking browser…</span>
       <button type="button" id="btnWipeAll" class="btn btn-danger-soft" data-i18n="wipeAllBtn" title="Clean all temporary sessions and leftover folders">🧹 Clean All Sessions</button>
       <button type="button" id="btnDataFolder" class="btn btn-secondary" data-i18n="dataFolderBtn" title="Show data folder in explorer">Data Folder</button>
-      <button type="button" id="btnDownloadChromium" class="btn btn-primary" data-i18n="downloadChromiumBtn" title="Download portable Chromium">Download Browser</button>
+      <button type="button" id="btnContactAdmin" class="btn btn-secondary" data-i18n="contactAdminBtn" title="Contact Admin on Telegram / ارتباط با ادمین در تلگرام">💬 Contact Admin</button>
+      <button type="button" id="btnDownloadChromium" class="btn btn-primary" data-i18n="downloadChromiumBtn" title="Download browser engine">Download Browser</button>
     </div>
   </header>
 
   <div id="noBrowserBanner" class="banner banner-warning" hidden>
     <span class="banner-icon" aria-hidden="true">⚠</span>
-    <p class="banner-text" data-i18n="noBrowserBanner">No browser found on the system. Download Chromium or install Edge/Chrome to launch profiles.</p>
+    <p class="banner-text" data-i18n="noBrowserBanner">Dedicated browser engine is required. Please download it to launch profiles.</p>
     <div class="banner-actions">
       <button type="button" id="btnBannerDownload" class="btn btn-primary btn-sm" data-i18n="downloadChromiumBtn">Download Browser</button>
       <button type="button" id="btnBannerDismiss" class="btn btn-ghost btn-sm" data-i18n="dismiss">Dismiss</button>
@@ -92,6 +93,8 @@
 
   <footer class="app-footer">
     <span id="footerCredit" data-i18n="footerCredit">Private Browser Pro | Anti-Detect & Zero-Data</span>
+    <span class="footer-separator">•</span>
+    <a href="https://t.me/jozm0z" id="linkContactAdmin" class="footer-link" target="_blank" data-i18n="contactAdminLink">💬 Support & Admin: @jozm0z</a>
   </footer>
 </div>
 

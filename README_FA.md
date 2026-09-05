@@ -7,6 +7,7 @@
 [![Electron](https://img.shields.io/badge/Electron-v33-blueviolet.svg)](https://www.electronjs.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20x64-informational.svg)]()
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-success.svg)]()
+[![Telegram: @jozm0z](https://img.shields.io/badge/Telegram-@jozm0z-2CA5E0?logo=telegram&logoColor=white)](https://t.me/jozm0z)
 
 > 🌐 **زبان / Language:** **🇮🇷 فارسی (Persian)** | [🇬🇧 **English Documentation**](README.md)
 
@@ -88,6 +89,14 @@ private-browser-pro/
 ├── README.md                  # مستندات انگلیسی
 └── README_FA.md               # مستندات فارسی
 ```
+
+---
+
+## 💬 ارتباط با ادمین و پشتیبانی
+
+جهت ارتباط با ادمین، پشتیبانی، ارسال پیشنهادات و گزارش باگ:
+- 📱 **تلگرام:** [@jozm0z](https://t.me/jozm0z)
+- 🌐 **لینک مستقیم تلگرام:** [https://t.me/jozm0z](https://t.me/jozm0z)
 
 ---
 

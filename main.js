@@ -1239,8 +1239,8 @@ function cleanupLaunch(token) {
 }
 
 async function launchProfile(profile) {
-  const bin = findChromiumBinary();
-  if (!bin) return { ok: false, error: 'NO_BROWSER' };
+  if (!fs.existsSync(CHROMIUM_EXE)) return { ok: false, error: 'NO_BROWSER' };
+  const bin = CHROMIUM_EXE;
 
   const isPersistent = profile.saveData !== false;
   const token = crypto.randomUUID();
@@ -2293,18 +2293,23 @@ ipcMain.handle('profiles:stop', (e, id) => ({ stopped: stopProfile(String(id || 
 ipcMain.handle('status:running', () => runningSnapshot());
 
 ipcMain.handle('status:chromium', () => {
-  const bin = findChromiumBinary();
+  const hasDownloaded = fs.existsSync(CHROMIUM_EXE);
   return {
-    found: !!bin,
-    path: bin,
+    found: hasDownloaded,
+    path: hasDownloaded ? CHROMIUM_EXE : null,
     name: 'jozmoz',
-    isDownloadedChromium: bin === CHROMIUM_EXE,
-    isEdge: !!bin && /msedge\.exe$/i.test(bin)
+    isDownloadedChromium: hasDownloaded,
+    isEdge: false
   };
 });
 
 ipcMain.handle('status:dataFolder', () => DATA_DIR);
 ipcMain.handle('status:openDataFolder', () => { shell.openPath(DATA_DIR); });
+ipcMain.handle('shell:openExternal', async (e, url) => {
+  if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+    return shell.openExternal(url);
+  }
+});
 
 ipcMain.handle('chromium:download', async (e) => {
   const progress = (p) => {
@@ -2343,10 +2348,11 @@ ipcMain.handle('ip:detect', async () => {
           resolve({ ok: false, error: e.message });
         }
       });
+      req.on('error', (e) => resolve({ ok: false, error: e.message }));
+      req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'TIMEOUT' }); });
     });
-    req.on('error', (e) => resolve({ ok: false, error: e.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'TIMEOUT' }); });
   });
 });
 }
+
 

@@ -28,5 +28,6 @@ contextBridge.exposeInMainWorld('api', {
     const handler = (e, snapshot) => cb(snapshot);
     ipcRenderer.on('browser:status', handler);
     return () => ipcRenderer.removeListener('browser:status', handler);
-  }
+  },
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url)
 });
