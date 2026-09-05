@@ -15,6 +15,16 @@
 
 ---
 
+## 📥 لینک‌های مستقیم دانلود نسخه ۱.۰.۰ (ویندوز ۶۴ بیتی)
+
+| نوع پکیج | توضیحات | لینک مستقیم دانلود |
+| :--- | :--- | :--- |
+| 💿 **نسخه نصبی (Setup)** | نصب استاندارد روی ویندوز ۱۰ و ۱۱ | [**دانلود فایل نصبی (Setup v1.0.0)**](https://github.com/jozmoz/private-browser-pro/releases/download/v1.0.0/Private.Browser.Pro.Setup.1.0.0.exe) |
+| 🚀 **نسخه پرتابل (Portable)** | بدون نیاز به نصب (تک‌فایل و قابل حمل) | [**دانلود نسخه پرتابل (Portable v1.0.0)**](https://github.com/jozmoz/private-browser-pro/releases/download/v1.0.0/Private.Browser.Pro.1.0.0.portable.exe) |
+| 📦 **صفحه انتشار ریلیز** | تمامی فایل‌ها و مشخصات نسخه | [**مشاهده انتشار v1.0.0 در گیت‌هاب**](https://github.com/jozmoz/private-browser-pro/releases/tag/v1.0.0) |
+
+---
+
 ## 🌟 قابلیت‌های کلیدی
 
 ### ۱. 🛡️ جعل پیشرفته اثرانگشت و مشخصات سخت‌افزاری
