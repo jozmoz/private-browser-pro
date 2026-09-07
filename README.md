@@ -15,13 +15,15 @@
 
 ---
 
-## 📥 Download v1.0.0 (Windows 64-bit)
+## 📥 Download v2.0.0 (Windows 64-bit)
 
 | Package | Type | Direct Download Link |
 | :--- | :--- | :--- |
-| 💿 **Windows Installer (Setup)** | NSIS Setup | [**Download Setup (v1.0.0)**](https://github.com/jozmoz/private-browser-pro/releases/download/v1.0.0/Private.Browser.Pro.Setup.1.0.0.exe) |
-| 🚀 **Standalone Portable** | Portable .exe | [**Download Portable (v1.0.0)**](https://github.com/jozmoz/private-browser-pro/releases/download/v1.0.0/Private.Browser.Pro.1.0.0.portable.exe) |
-| 📦 **GitHub Releases** | All Assets & Notes | [**View Release v1.0.0**](https://github.com/jozmoz/private-browser-pro/releases/tag/v1.0.0) |
+| 💿 **Windows Installer (Setup)** | NSIS Setup | [**Download Setup (v2.0.0)**](https://github.com/jozmoz/private-browser-pro/releases/download/v2.0.0/Private.Browser.Pro.Setup.2.0.0.exe) |
+| 🚀 **Standalone Portable** | Portable .exe | [**Download Portable (v2.0.0)**](https://github.com/jozmoz/private-browser-pro/releases/download/v2.0.0/Private.Browser.Pro.2.0.0.portable.exe) |
+| 📦 **GitHub Releases** | All Assets & Notes | [**View Release v2.0.0**](https://github.com/jozmoz/private-browser-pro/releases/tag/v2.0.0) |
+
+> Looking for the previous build? [v1.0.0 is still available here](https://github.com/jozmoz/private-browser-pro/releases/tag/v1.0.0).
 
 ---
 
