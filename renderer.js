@@ -1,6 +1,16 @@
 (function () {
   'use strict';
 
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   var COLORS = ['#4f8cff', '#22c55e', '#f59e0b', '#ef4444', '#a78bfa', '#ec4899', '#14b8a6', '#eab308'];
 
   var GPU_MAP = {
@@ -159,19 +169,19 @@
       wipeAllTitle: 'Wipe All Sessions and Data',
       wipeAllMsg: 'Are you sure? All running browsers will stop and all cache, cookies, and session folders will be purged.',
       activeBadge: '● Active',
-      launchBtn: '▶ Launch Profile',
-      stopBtn: '⏹ Stop Browser',
+      launchBtn: 'Launch Profile',
+      stopBtn: 'Stop Browser',
       launching: 'Launching…',
       stopping: 'Stopping…',
-      cloneBtn: '📋 Clone',
-      editBtn: '✎ Edit',
-      randomizeBtn: '🎲 New Identity',
-      wipeBtn: '🧹 Wipe',
-      deleteBtn: '🗑 Delete',
+      cloneBtn: 'Clone',
+      editBtn: 'Edit',
+      randomizeBtn: 'New Identity',
+      wipeBtn: 'Wipe',
+      deleteBtn: 'Delete',
       persistentChip: '💾 Persistent Data',
       ephemeralChip: '⚡ Ephemeral',
-      engineReady: '● Private Browser engine is ready',
-      engineNotFound: '● Dedicated browser engine not installed — download required',
+      engineReady: 'Engine Ready',
+      engineNotFound: 'Engine Needed',
       noBrowserBanner: 'Dedicated browser engine is required. Please download it to launch profiles.',
       dismiss: 'Dismiss',
       downloadPreparing: 'Preparing download…',
@@ -216,7 +226,51 @@
       lblProxyPass: 'Password',
       btnTestProxy: '⚡ Test Proxy Connection',
       noteTitle: 'Private Browser Pro Isolation & Storage:',
-      noteDesc: 'In persistent mode, logins and cookies are isolated in dedicated profile storage. In ephemeral mode, all session data is permanently destroyed upon browser exit.'
+      noteDesc: 'In persistent mode, logins and cookies are isolated in dedicated profile storage. In ephemeral mode, all session data is permanently destroyed upon browser exit.',
+      toolsMenu: 'Tools',
+      tabGeneral: 'General & Storage',
+      tabFingerprint: 'Identity & Hardware',
+      tabProxy: 'Proxy Tunnel',
+      menuClone: 'Clone Profile',
+      menuRandomize: 'New Digital Identity',
+      menuWipe: 'Wipe Session Data',
+      menuDelete: 'Delete Profile',
+      proxyManagerBtn: 'Proxy Manager',
+      proxyManagerTitle: 'Proxy Manager & Speed Test',
+      btnTestAllProxies: '⚡ Test All',
+      btnSortProxiesByPing: '📶 Sort by Ping',
+      btnAddProxies: '＋ Add Proxies',
+      btnClearDead: '🧹 Remove Dead',
+      proxyFilterPlaceholder: 'Filter IP, host, country...',
+      bulkImportTitle: 'Bulk Import Proxies',
+      bulkImportHint: 'Supported formats: http://host:port:user:pass, socks5://host:port:user:pass, host:port:user:pass, host:port (one per line)',
+      lblDefaultProtocol: 'Default Protocol:',
+      btnImportProxies: 'Import Proxies',
+      thStatus: 'Status / Ping',
+      thProtocol: 'Protocol',
+      thHostPort: 'Host & Port',
+      thCountry: 'Country / Location',
+      thAuth: 'Auth',
+      thActions: 'Actions',
+      proxyEmptyTitle: 'No Proxies Added Yet',
+      proxyEmptyDesc: 'Click "Add Proxies" to paste your proxy list in bulk. You can test latency, detect countries, and link them to browser profiles.',
+      btnClearAll: '🗑 Clear All',
+      close: 'Close',
+      lblSelectFromManager: 'Select Saved Proxy:',
+      btnManageProxies: '⚡ Open Proxy Manager',
+      optCustomProxy: '-- Manual Configuration --',
+      testingProgress: 'Testing {current} of {total} proxies...',
+      testCompleted: 'Batch test completed: {alive} alive, {dead} dead.',
+      noDeadProxies: 'No dead proxies found to remove.',
+      deadProxiesRemoved: 'Removed {count} dead proxies.',
+      allProxiesCleared: 'All proxies have been cleared.',
+      confirmClearProxiesTitle: 'Clear All Proxies',
+      confirmClearProxiesMsg: 'Are you sure you want to remove all saved proxies?',
+      proxiesImported: 'Successfully imported {count} proxies.',
+      noValidProxiesFound: 'No valid proxies found in the text.',
+      proxyCopied: 'Proxy copied to clipboard.',
+      proxyDeleted: 'Proxy deleted.',
+      proxyAutoFilled: 'Proxy auto-filled from manager!'
     },
     fa: {
       appTitle: 'مرورگر ضدتشخیص پیشرفته',
@@ -259,19 +313,19 @@
       wipeAllTitle: 'پاک‌سازی کامل همه نشست‌ها و داده‌ها',
       wipeAllMsg: 'آیا اطمینان دارید؟ تمامی مرورگرهای در حال اجرا متوقف شده و کلیه پوشه‌های موقت، کوکی‌ها و فایل‌های نشست به طور قطعی منهدم خواهند شد.',
       activeBadge: '● فعال',
-      launchBtn: '▶ اجرای امن',
-      stopBtn: '⏹ توقف مرورگر',
+      launchBtn: 'اجرای مرورگر',
+      stopBtn: 'توقف مرورگر',
       launching: 'در حال آماده‌سازی…',
       stopping: 'در حال توقف…',
-      cloneBtn: '📋 تکثیر',
-      editBtn: '✎ ویرایش',
-      randomizeBtn: '🎲 هویت جدید',
-      wipeBtn: '🧹 پاک‌سازی',
-      deleteBtn: '🗑 حذف',
+      cloneBtn: 'تکثیر',
+      editBtn: 'ویرایش',
+      randomizeBtn: 'هویت جدید',
+      wipeBtn: 'پاک‌سازی',
+      deleteBtn: 'حذف',
       persistentChip: '💾 داده پایدار',
       ephemeralChip: '⚡ یک‌بار مصرف',
-      engineReady: '● موتور اختصاصی مرورگر آماده است',
-      engineNotFound: '● موتور اختصاصی مرورگر نصب نیست — دانلود اجباری است',
+      engineReady: 'موتور آماده است',
+      engineNotFound: 'نیازمند دانلود موتور',
       noBrowserBanner: 'استفاده از پروفایل‌ها نیازمند موتور اختصاصی است. لطفاً موتور مرورگر را دانلود نمایید.',
       dismiss: 'بستن',
       downloadPreparing: 'در حال آماده‌سازی دانلود…',
@@ -316,7 +370,51 @@
       lblProxyPass: 'کلمه عبور',
       btnTestProxy: '⚡ تست زنده پینگ و اتصال پروکسی',
       noteTitle: 'ایزولاسیون کامل و ماندگاری هوشمند:',
-      noteDesc: 'در حالت ذخیره‌سازی پایدار، تمامی لاگین‌ها، کوکی‌ها و تاریخچه‌های شما در پوشه امن اختصاصی ذخیره می‌مانند تا هر زمان مایل بودید با دکمه «🧹 پاک‌سازی» ریست شوند. در صورت خاموش بودن تیک، داده‌ها به محض بستن مرورگر حذف خواهند شد.'
+      noteDesc: 'در حالت ذخیره‌سازی پایدار، تمامی لاگین‌ها، کوکی‌ها و تاریخچه‌های شما در پوشه امن اختصاصی ذخیره می‌مانند تا هر زمان مایل بودید با دکمه «🧹 پاک‌سازی» ریست شوند. در صورت خاموش بودن تیک، داده‌ها به محض بستن مرورگر حذف خواهند شد.',
+      toolsMenu: 'ابزارها',
+      tabGeneral: 'عمومی و ذخیره‌سازی',
+      tabFingerprint: 'هویت و سخت‌افزار',
+      tabProxy: 'تونل پروکسی',
+      menuClone: 'تکثیر مرورگر',
+      menuRandomize: 'تولید هویت جدید',
+      menuWipe: 'پاک‌سازی داده‌های نشست',
+      menuDelete: 'حذف این مرورگر',
+      proxyManagerBtn: 'مدیریت پروکسی',
+      proxyManagerTitle: 'مدیریت و تست سرعت پروکسی‌ها',
+      btnTestAllProxies: '⚡ تست همگانی',
+      btnSortProxiesByPing: '📶 مرتب‌سازی بر اساس کمترین پینگ',
+      btnAddProxies: '＋ افزودن پروکسی‌ها',
+      btnClearDead: '🧹 پاک‌سازی غیرفعال‌ها',
+      proxyFilterPlaceholder: 'فیلتر آی‌پی، هاست، کشور…',
+      bulkImportTitle: 'افزودن دسته‌جمعی پروکسی‌ها',
+      bulkImportHint: 'فرمت‌های پشتیبانی‌شده: http://host:port:user:pass یا socks5://host:port یا host:port:user:pass (هر خط یک پروکسی)',
+      lblDefaultProtocol: 'پروتکل پیش‌فرض:',
+      btnImportProxies: 'افزودن و ذخیره‌سازی',
+      thStatus: 'وضعیت / پینگ',
+      thProtocol: 'پروتکل',
+      thHostPort: 'هاست و پورت',
+      thCountry: 'کشور و پرچم',
+      thAuth: 'احراز هویت',
+      thActions: 'عملیات',
+      proxyEmptyTitle: 'هنوز هیچ پروکسی افزوده‌ای ثبت نشده است',
+      proxyEmptyDesc: 'روی «افزودن پروکسی‌ها» کلیک کنید و لیست خود را به صورت دسته‌جمعی وارد نمایید تا تست سرعت و کشور هوشمند انجام شود.',
+      btnClearAll: '🗑 حذف همه پروکسی‌ها',
+      close: 'بستن',
+      lblSelectFromManager: 'انتخاب از پروکسی‌های ذخیره‌شده:',
+      btnManageProxies: '⚡ باز کردن مدیریت پروکسی',
+      optCustomProxy: '-- تنظیم دستی مشخصات --',
+      testingProgress: 'در حال تست {current} از {total} پروکسی…',
+      testCompleted: 'تست همگانی به پایان رسید: {alive} فعال، {dead} ناموفق.',
+      noDeadProxies: 'هیچ پروکسی ناموفقی برای پاک‌سازی وجود ندارد.',
+      deadProxiesRemoved: '{count} پروکسی قطع و ناموفق حذف شدند.',
+      allProxiesCleared: 'تمامی پروکسی‌های ذخیره‌شده حذف شدند.',
+      confirmClearProxiesTitle: 'حذف تمامی پروکسی‌ها',
+      confirmClearProxiesMsg: 'آیا از حذف کامل تمامی پروکسی‌های ذخیره‌شده اطمینان دارید؟',
+      proxiesImported: '{count} پروکسی با موفقیت اضافه شدند.',
+      noValidProxiesFound: 'هیچ پروکسی معتبری در متن ورودی یافت نشد.',
+      proxyCopied: 'مشخصات پروکسی کپی شد.',
+      proxyDeleted: 'پروکسی حذف شد.',
+      proxyAutoFilled: 'مشخصات پروکسی انتخاب‌شده جایگذاری شد!'
     }
   };
 
@@ -341,7 +439,10 @@
     editingId: null,
     downloading: false,
     launching: {},
-    stopping: {}
+    stopping: {},
+    proxies: [],
+    proxyFilterQuery: '',
+    isTestingProxies: false
   };
 
   function $(id) { return document.getElementById(id); }
@@ -621,9 +722,33 @@
     toast('هویت دیجیتال تصادفی تنظیم شد.', 'info');
   }
 
+  function switchModalTab(tabId) {
+    var tabs = document.querySelectorAll('.modal-tab-btn');
+    var panes = document.querySelectorAll('#profileForm .tab-pane');
+    tabs.forEach(function (btn) {
+      var isActive = btn.getAttribute('data-tab') === tabId;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    panes.forEach(function (pane) {
+      var isActive = pane.id === tabId;
+      pane.classList.toggle('active', isActive);
+      pane.hidden = !isActive;
+    });
+  }
+
+  function closeAllDropdowns() {
+    document.querySelectorAll('.dropdown-menu, .card-menu-dropdown').forEach(function (d) {
+      d.hidden = true;
+    });
+    var toolsBtn = $('btnToolsMenu');
+    if (toolsBtn) toolsBtn.setAttribute('aria-expanded', 'false');
+  }
+
   function openProfileModal(mode, profile) {
     var overlay = $('profileModal');
     if (!overlay) return;
+    switchModalTab('tabGeneral');
     var titleEl = $('profileModalTitle');
     var nameInput = $('profileName');
     var urlInput = $('startupUrl');
@@ -707,6 +832,18 @@
     $('proxyPort').value = pxy.port ? String(pxy.port) : '';
     $('proxyUser').value = pxy.username || '';
     $('proxyPass').value = pxy.password || '';
+
+    var badge = $('proxyTestResult');
+    if (badge) {
+      badge.hidden = true;
+      badge.className = 'proxy-test-badge';
+      badge.textContent = '';
+    }
+
+    var matchedPrx = state.proxies.find(function (x) {
+      return pxy.host && x.host.toLowerCase() === pxy.host.toLowerCase() && String(x.port) === String(pxy.port);
+    });
+    populateProfileProxyPicker(matchedPrx ? matchedPrx.id : '');
 
     showOverlay(overlay);
     setTimeout(function () {
@@ -1154,36 +1291,81 @@
         launchBtn.hidden = true;
         stopBtn.hidden = false;
         stopBtn.disabled = isStopping;
-        stopBtn.textContent = isStopping ? t('stopping') : t('stopBtn');
-        stopBtn.addEventListener('click', function () { handleStop(p.id); });
+        stopBtn.innerHTML = '⏹ <span data-i18n="stopBtn">' + (isStopping ? t('stopping') : t('stopBtn')) + '</span>';
+        stopBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          handleStop(p.id);
+        });
       } else {
         stopBtn.hidden = true;
         launchBtn.hidden = false;
         launchBtn.disabled = isLaunching;
-        launchBtn.textContent = isLaunching ? t('launching') : t('launchBtn');
-        launchBtn.addEventListener('click', function () { handleLaunch(p.id); });
+        launchBtn.innerHTML = '▶ <span data-i18n="launchBtn">' + (isLaunching ? t('launching') : t('launchBtn')) + '</span>';
+        launchBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          handleLaunch(p.id);
+        });
       }
+    }
+
+    var menuBtn = card.querySelector('[data-action="toggle-menu"]');
+    var menuDropdown = card.querySelector('.card-menu-dropdown');
+    if (menuBtn && menuDropdown) {
+      menuBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var wasHidden = menuDropdown.hidden;
+        closeAllDropdowns();
+        menuDropdown.hidden = !wasHidden;
+      });
     }
 
     card.querySelectorAll('button[data-action]').forEach(function (btn) {
       var action = btn.getAttribute('data-action');
       if (action === 'clone') {
-        btn.textContent = t('cloneBtn');
-        btn.addEventListener('click', function () { handleClone(p.id); });
+        var spanClone = btn.querySelector('span');
+        if (spanClone) spanClone.textContent = t('menuClone');
+        else btn.textContent = t('cloneBtn');
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          closeAllDropdowns();
+          handleClone(p.id);
+        });
       } else if (action === 'edit') {
-        btn.textContent = t('editBtn');
-        btn.addEventListener('click', function () { openProfileModal('edit', p); });
+        btn.title = t('editBtn');
+        var spanEdit = btn.querySelector('span');
+        if (spanEdit) spanEdit.textContent = t('editBtn');
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          closeAllDropdowns();
+          openProfileModal('edit', p);
+        });
       } else if (action === 'randomize') {
-        btn.textContent = t('randomizeBtn');
-        btn.addEventListener('click', function () { handleRandomize(p.id); });
+        var spanRand = btn.querySelector('span');
+        if (spanRand) spanRand.textContent = t('menuRandomize');
+        else btn.textContent = t('randomizeBtn');
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          closeAllDropdowns();
+          handleRandomize(p.id);
+        });
       } else if (action === 'wipe') {
-        btn.textContent = t('wipeBtn');
-        btn.addEventListener('click', function () { handleWipe(p.id); });
+        var spanWipe = btn.querySelector('span');
+        if (spanWipe) spanWipe.textContent = t('menuWipe');
+        else btn.textContent = t('wipeBtn');
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          closeAllDropdowns();
+          handleWipe(p.id);
+        });
       } else if (action === 'delete') {
-        if (!btn.classList.contains('card-top-delete')) {
-          btn.textContent = t('deleteBtn');
-        }
-        btn.addEventListener('click', function () { handleDelete(p.id); });
+        var spanDel = btn.querySelector('span');
+        if (spanDel) spanDel.textContent = t('menuDelete');
+        else if (!btn.classList.contains('card-top-delete')) btn.textContent = t('deleteBtn');
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          closeAllDropdowns();
+          handleDelete(p.id);
+        });
       }
     });
 
@@ -1238,9 +1420,10 @@
     var dlBtn = $('btnDownloadChromium');
     var s = state.chromium || {};
     var pathEl = $('chromiumPath');
+    var isEn = currentLang === 'en';
 
     if (pathEl) {
-      pathEl.textContent = s.found ? 'jozmoz' : (currentLang === 'en' ? 'Not Found' : 'یافت نشد');
+      pathEl.textContent = s.found ? 'jozmoz' : (isEn ? 'Not Found' : 'یافت نشد');
       pathEl.title = 'jozmoz Engine';
     }
 
@@ -1249,27 +1432,27 @@
       if (s.found) {
         badge.classList.add('status-ok');
         badge.textContent = t('engineReady');
-        badge.title = 'jozmoz';
+        badge.title = 'jozmoz Engine Ready';
       } else {
         badge.classList.add('status-warn');
         badge.textContent = t('engineNotFound');
-        badge.title = '';
+        badge.title = isEn ? 'Dedicated browser engine not installed — download required' : 'موتور اختصاصی مرورگر نصب نیست — دانلود اجباری است';
       }
     }
 
     if (dlBtn) {
       dlBtn.classList.remove('attention');
-      var isEn = currentLang === 'en';
       if (state.downloading) {
+        dlBtn.hidden = false;
         dlBtn.disabled = true;
         dlBtn.textContent = isEn ? '⏳ Downloading…' : '⏳ در حال دانلود…';
-      } else if (s.found && s.isDownloadedChromium) {
-        dlBtn.disabled = true;
-        dlBtn.textContent = isEn ? '✓ Browser Engine Ready' : '✓ موتور مرورگر آماده است';
+      } else if (s.found) {
+        dlBtn.hidden = true;
       } else {
+        dlBtn.hidden = false;
         dlBtn.disabled = false;
         dlBtn.classList.add('attention');
-        dlBtn.textContent = isEn ? '⬇ Download Browser Engine (Required)' : '⬇ دانلود موتور مرورگر (اجباری)';
+        dlBtn.textContent = isEn ? '⬇ Download Engine' : '⬇ دانلود موتور مرورگر';
       }
     }
 
@@ -1538,7 +1721,7 @@
         if (res && res.ok) {
           badge.className = 'proxy-test-badge success';
           var latStr = currentLang === 'en' ? String(res.latencyMs || 0) : toFaDigits(res.latencyMs || 0);
-          var txt = (currentLang === 'en' ? '✓ Connected (' : '✓ متصل (') + latStr + 'ms)';
+          var txt = (res.flag ? res.flag + ' ' : '') + (currentLang === 'en' ? '✓ Connected (' : '✓ متصل (') + latStr + 'ms)';
           if (res.country) txt += ' • ' + res.country;
           badge.textContent = txt;
           toast(currentLang === 'en' ? ('Proxy is active (' + (res.latencyMs || 0) + 'ms).') : ('پروکسی فعال است (' + (res.latencyMs || 0) + 'ms).'), 'success');
@@ -1566,6 +1749,480 @@
     } catch (err) {
       toast('خطا در باز کردن پوشه: ' + errMsg(err), 'error');
     }
+  }
+
+  /* ---------- Proxy Manager Logic ---------- */
+
+  function loadProxiesList() {
+    var a = api();
+    if (!a || typeof a.listProxies !== 'function') return Promise.resolve([]);
+    return a.listProxies().then(function (list) {
+      state.proxies = Array.isArray(list) ? list : [];
+      updateProxyCounters();
+      populateProfileProxyPicker();
+      renderProxyTable();
+      return state.proxies;
+    }).catch(function () {
+      state.proxies = [];
+      return [];
+    });
+  }
+
+  function saveProxiesList() {
+    var a = api();
+    if (!a || typeof a.saveProxies !== 'function') return Promise.resolve(false);
+    return a.saveProxies(state.proxies).then(function () {
+      updateProxyCounters();
+      populateProfileProxyPicker();
+      return true;
+    });
+  }
+
+  function updateProxyCounters() {
+    var total = state.proxies.length;
+    var alive = state.proxies.filter(function (p) { return p.status === 'alive'; }).length;
+    var countEl = $('proxyCountSummary');
+    var aliveEl = $('proxyAliveSummary');
+    if (countEl) countEl.textContent = currentLang === 'en' ? (total + ' Proxies') : (toFaDigits(total) + ' پروکسی');
+    if (aliveEl) aliveEl.textContent = currentLang === 'en' ? (alive + ' Alive') : (toFaDigits(alive) + ' فعال');
+  }
+
+  function populateProfileProxyPicker(selectedId) {
+    var picker = $('profileProxyPicker');
+    if (!picker) return;
+    var currentVal = selectedId !== undefined ? selectedId : (picker.value || '');
+    picker.innerHTML = '';
+
+    var optDefault = document.createElement('option');
+    optDefault.value = '';
+    optDefault.textContent = t('optCustomProxy');
+    picker.appendChild(optDefault);
+
+    state.proxies.forEach(function (p) {
+      var opt = document.createElement('option');
+      opt.value = p.id;
+      var flag = p.flag || '🌐';
+      var pingText = p.latencyMs ? (toFaDigits(p.latencyMs) + 'ms') : (p.status === 'dead' ? (currentLang === 'en' ? 'dead' : 'قطع') : (currentLang === 'en' ? 'untested' : 'تست نشده'));
+      var countryText = p.country ? (' • ' + p.country) : '';
+      opt.textContent = flag + ' ' + (p.type || 'http').toUpperCase() + ' - ' + p.host + ':' + p.port + ' (' + pingText + countryText + ')';
+      picker.appendChild(opt);
+    });
+
+    picker.value = currentVal;
+  }
+
+  function parseBulkProxies(rawText, defaultType) {
+    if (!rawText || typeof rawText !== 'string') return [];
+    var lines = rawText.split(/\r?\n/);
+    var defType = (defaultType === 'socks5' ? 'socks5' : 'http');
+    var parsed = [];
+
+    lines.forEach(function (line) {
+      var l = line.trim();
+      if (!l || l.startsWith('#') || l.startsWith('//')) return;
+
+      var type = defType;
+      if (/^socks5?:\/\//i.test(l)) {
+        type = 'socks5';
+        l = l.replace(/^socks5?:\/\//i, '').trim();
+      } else if (/^https?:\/\//i.test(l)) {
+        type = 'http';
+        l = l.replace(/^https?:\/\//i, '').trim();
+      }
+
+      var host = '';
+      var port = 0;
+      var user = '';
+      var pass = '';
+
+      if (l.includes('@') && /@[a-zA-Z0-9.\-_[\]]+:\d+(\/.*)?$/.test(l)) {
+        var lastAt = l.lastIndexOf('@');
+        var authPart = l.slice(0, lastAt);
+        var hostPart = l.slice(lastAt + 1);
+
+        if (authPart.includes(':')) {
+          var uParts = authPart.split(':');
+          user = uParts[0];
+          pass = uParts.slice(1).join(':');
+        } else {
+          user = authPart;
+        }
+
+        var hpParts = hostPart.split(':');
+        host = hpParts[0].split('/')[0].trim();
+        port = parseInt(hpParts[1] ? hpParts[1].split('/')[0].trim() : '', 10);
+      } else {
+        var parts = l.split(/[:|\t]/);
+        if (parts.length >= 2) {
+          var p1Num = parseInt(parts[1], 10);
+          var p3Num = parts[3] ? parseInt(parts[3], 10) : NaN;
+
+          if (!isNaN(p1Num) && p1Num >= 1 && p1Num <= 65535) {
+            host = parts[0].split('/')[0].trim();
+            port = p1Num;
+            if (parts[2]) user = parts[2].trim();
+            if (parts.length >= 4) pass = parts.slice(3).join(':').trim();
+          } else if (!isNaN(p3Num) && p3Num >= 1 && p3Num <= 65535) {
+            user = parts[0].trim();
+            pass = parts[1].trim();
+            host = parts[2].split('/')[0].trim();
+            port = p3Num;
+          }
+        }
+      }
+
+      if (host && Number.isInteger(port) && port >= 1 && port <= 65535) {
+        parsed.push({
+          id: 'prx_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+          type: type,
+          host: host,
+          port: port,
+          username: user || '',
+          password: pass || '',
+          latencyMs: null,
+          status: 'untested',
+          country: '',
+          countryCode: '',
+          flag: '🌐',
+          lastTested: null
+        });
+      }
+    });
+
+    return parsed;
+  }
+
+  function testSingleProxyItem(proxy) {
+    var a = api();
+    if (!a || typeof a.testProxyItem !== 'function') return Promise.resolve({ ok: false, error: 'API unavailable' });
+    proxy.status = 'testing';
+    renderProxyRow(proxy);
+
+    return a.testProxyItem(proxy).then(function (res) {
+      if (res && res.ok) {
+        proxy.status = 'alive';
+        proxy.latencyMs = res.latencyMs;
+        proxy.exitIp = res.ip;
+        proxy.country = res.country || 'Unknown';
+        proxy.countryCode = res.countryCode || '';
+        proxy.flag = res.flag || '🌐';
+        proxy.lastTested = Date.now();
+      } else {
+        proxy.status = 'dead';
+        proxy.error = (res && res.error) || 'Failed to connect';
+        proxy.latencyMs = null;
+        proxy.lastTested = Date.now();
+      }
+      renderProxyRow(proxy);
+      return res;
+    }).catch(function (err) {
+      proxy.status = 'dead';
+      proxy.error = errMsg(err);
+      proxy.latencyMs = null;
+      proxy.lastTested = Date.now();
+      renderProxyRow(proxy);
+      return { ok: false, error: proxy.error };
+    });
+  }
+
+  function testAllProxiesBatch() {
+    if (state.isTestingProxies) return;
+    if (!state.proxies.length) {
+      toast(t('proxyEmptyTitle'), 'info');
+      return;
+    }
+
+    state.isTestingProxies = true;
+    var btnTest = $('btnTestAllProxies');
+    if (btnTest) {
+      btnTest.disabled = true;
+      btnTest.textContent = '⏳ ' + (currentLang === 'en' ? 'Testing...' : 'در حال تست...');
+    }
+
+    var progressWrap = $('proxyTestProgressBarWrap');
+    var progressBar = $('proxyTestProgressBar');
+    var progressText = $('proxyTestProgressText');
+    var progressCount = $('proxyTestProgressCount');
+    if (progressWrap) progressWrap.hidden = false;
+
+    var total = state.proxies.length;
+    var completed = 0;
+    var aliveCount = 0;
+    var deadCount = 0;
+
+    function updateProgress() {
+      var pct = Math.round((completed / total) * 100);
+      if (progressBar) progressBar.style.width = pct + '%';
+      if (progressText) progressText.textContent = t('testingProgress', { current: String(completed), total: String(total) });
+      if (progressCount) progressCount.textContent = toFaDigits(completed) + ' / ' + toFaDigits(total);
+    }
+
+    updateProgress();
+
+    var queue = state.proxies.slice();
+    var concurrency = Math.min(4, queue.length);
+    var running = 0;
+
+    return new Promise(function (resolve) {
+      function next() {
+        if (completed >= total) {
+          state.isTestingProxies = false;
+          if (progressWrap) setTimeout(function () { progressWrap.hidden = true; }, 1500);
+          if (btnTest) {
+            btnTest.disabled = false;
+            btnTest.textContent = t('btnTestAllProxies');
+          }
+          saveProxiesList();
+          renderProxyTable();
+          toast(t('testCompleted', { alive: toFaDigits(aliveCount), dead: toFaDigits(deadCount) }), aliveCount > 0 ? 'success' : 'error');
+          return resolve();
+        }
+
+        while (running < concurrency && queue.length > 0) {
+          var proxy = queue.shift();
+          running++;
+          (function (p) {
+            testSingleProxyItem(p).then(function (res) {
+              if (res && res.ok) aliveCount++;
+              else deadCount++;
+              completed++;
+              running--;
+              updateProgress();
+              updateProxyCounters();
+              next();
+            });
+          })(proxy);
+        }
+      }
+
+      next();
+    });
+  }
+
+  function sortProxiesByPing() {
+    if (!state.proxies.length) return;
+    state.proxies.sort(function (a, b) {
+      var aAlive = a.status === 'alive' && typeof a.latencyMs === 'number';
+      var bAlive = b.status === 'alive' && typeof b.latencyMs === 'number';
+
+      if (aAlive && bAlive) return a.latencyMs - b.latencyMs;
+      if (aAlive && !bAlive) return -1;
+      if (!aAlive && bAlive) return 1;
+
+      if (a.status === 'untested' && b.status === 'dead') return -1;
+      if (a.status === 'dead' && b.status === 'untested') return 1;
+
+      return 0;
+    });
+
+    saveProxiesList();
+    renderProxyTable();
+    toast(currentLang === 'en' ? 'Sorted proxies by lowest ping!' : 'پروکسی‌ها بر اساس کمترین پینگ مرتب شدند!', 'success');
+  }
+
+  function removeDeadProxies() {
+    var dead = state.proxies.filter(function (p) { return p.status === 'dead'; });
+    if (!dead.length) {
+      toast(t('noDeadProxies'), 'info');
+      return;
+    }
+    var count = dead.length;
+    state.proxies = state.proxies.filter(function (p) { return p.status !== 'dead'; });
+    saveProxiesList();
+    renderProxyTable();
+    toast(t('deadProxiesRemoved', { count: toFaDigits(count) }), 'success');
+  }
+
+  function clearAllProxies() {
+    if (!state.proxies.length) return;
+    openConfirm({
+      title: t('confirmClearProxiesTitle'),
+      message: t('confirmClearProxiesMsg'),
+      danger: true
+    }).then(function (res) {
+      if (res && res.confirmed) {
+        state.proxies = [];
+        saveProxiesList();
+        renderProxyTable();
+        toast(t('allProxiesCleared'), 'info');
+      }
+    });
+  }
+
+  function getFilteredProxies() {
+    var q = (state.proxyFilterQuery || '').trim().toLowerCase();
+    if (!q) return state.proxies;
+    return state.proxies.filter(function (p) {
+      return (
+        (p.host && p.host.toLowerCase().includes(q)) ||
+        String(p.port).includes(q) ||
+        (p.country && p.country.toLowerCase().includes(q)) ||
+        (p.countryCode && p.countryCode.toLowerCase().includes(q)) ||
+        (p.type && p.type.toLowerCase().includes(q))
+      );
+    });
+  }
+
+  function renderProxyRow(p) {
+    var tr = $('proxy-row-' + p.id);
+    if (!tr) return;
+
+    var statusCell = tr.querySelector('.cell-status');
+    if (statusCell) {
+      var badgeClass = 'ping-untested';
+      var text = currentLang === 'en' ? 'Untested' : 'تست نشده';
+      if (p.status === 'testing') {
+        badgeClass = 'ping-testing';
+        text = '⚡ ' + (currentLang === 'en' ? 'Testing...' : 'در حال تست...');
+      } else if (p.status === 'alive' && typeof p.latencyMs === 'number') {
+        if (p.latencyMs < 300) badgeClass = 'ping-fast';
+        else if (p.latencyMs < 700) badgeClass = 'ping-med';
+        else badgeClass = 'ping-slow';
+        text = toFaDigits(p.latencyMs) + ' ms';
+      } else if (p.status === 'dead') {
+        badgeClass = 'ping-dead';
+        text = currentLang === 'en' ? 'Dead / Error' : 'قطع / خطا';
+      }
+      var safeBadgeClass = ['ping-fast', 'ping-med', 'ping-slow', 'ping-dead', 'ping-testing'].includes(badgeClass) ? badgeClass : 'ping-untested';
+      statusCell.innerHTML = '<span class="ping-badge ' + safeBadgeClass + '">' + escapeHtml(text) + '</span>';
+    }
+
+    var countryCell = tr.querySelector('.cell-country');
+    if (countryCell) {
+      var flag = p.flag || '🌐';
+      var countryName = p.country || (p.status === 'alive' ? 'Unknown' : '—');
+      countryCell.innerHTML = '<div class="country-cell"><span class="country-flag">' + escapeHtml(flag) + '</span><span class="country-name" title="' + escapeHtml(countryName) + '">' + escapeHtml(countryName) + '</span></div>';
+    }
+  }
+
+  function renderProxyTable() {
+    var tbody = $('proxyTableBody');
+    var emptyEl = $('proxyEmptyState');
+    if (!tbody) return;
+
+    var list = getFilteredProxies();
+    if (!state.proxies.length) {
+      tbody.innerHTML = '';
+      if (emptyEl) emptyEl.hidden = false;
+      return;
+    }
+    if (emptyEl) emptyEl.hidden = true;
+
+    tbody.innerHTML = '';
+    list.forEach(function (p) {
+      var tr = document.createElement('tr');
+      tr.id = 'proxy-row-' + p.id;
+
+      // Status / Ping cell
+      var tdStatus = document.createElement('td');
+      tdStatus.className = 'cell-status';
+      var badgeClass = 'ping-untested';
+      var statusText = currentLang === 'en' ? 'Untested' : 'تست نشده';
+      if (p.status === 'testing') {
+        badgeClass = 'ping-testing';
+        statusText = '⚡ ' + (currentLang === 'en' ? 'Testing...' : 'در حال تست...');
+      } else if (p.status === 'alive' && typeof p.latencyMs === 'number') {
+        if (p.latencyMs < 300) badgeClass = 'ping-fast';
+        else if (p.latencyMs < 700) badgeClass = 'ping-med';
+        else badgeClass = 'ping-slow';
+        statusText = toFaDigits(p.latencyMs) + ' ms';
+      } else if (p.status === 'dead') {
+        badgeClass = 'ping-dead';
+        statusText = currentLang === 'en' ? 'Dead / Error' : 'قطع / خطا';
+      }
+      var safeBadgeClass = ['ping-fast', 'ping-med', 'ping-slow', 'ping-dead', 'ping-testing'].includes(badgeClass) ? badgeClass : 'ping-untested';
+      tdStatus.innerHTML = '<span class="ping-badge ' + safeBadgeClass + '">' + escapeHtml(statusText) + '</span>';
+      tr.appendChild(tdStatus);
+
+      // Protocol cell
+      var tdProto = document.createElement('td');
+      var isSocks = p.type === 'socks5';
+      tdProto.innerHTML = '<span class="proto-badge ' + (isSocks ? 'proto-socks5' : 'proto-http') + '">' + escapeHtml((p.type || 'http').toUpperCase()) + '</span>';
+      tr.appendChild(tdProto);
+
+      // Host & Port cell
+      var tdHost = document.createElement('td');
+      tdHost.dir = 'ltr';
+      tdHost.style.textAlign = 'start';
+      tdHost.innerHTML = '<strong class="mono" style="font-size: 13px; color: #f1f5f9;">' + escapeHtml(p.host) + '</strong><span style="color: var(--text-muted);">:' + escapeHtml(p.port) + '</span>';
+      tr.appendChild(tdHost);
+
+      // Country cell
+      var tdCountry = document.createElement('td');
+      tdCountry.className = 'cell-country';
+      var flag = p.flag || '🌐';
+      var countryName = p.country || (p.status === 'alive' ? 'Unknown' : '—');
+      tdCountry.innerHTML = '<div class="country-cell"><span class="country-flag">' + escapeHtml(flag) + '</span><span class="country-name" title="' + escapeHtml(countryName) + '">' + escapeHtml(countryName) + '</span></div>';
+      tr.appendChild(tdCountry);
+
+      // Auth cell
+      var tdAuth = document.createElement('td');
+      var hasAuth = !!(p.username || p.password);
+      tdAuth.innerHTML = hasAuth ? '<span class="proxy-auth-badge has-auth">🔒 ' + escapeHtml(p.username || 'User') + '</span>' : '<span class="proxy-auth-badge">No Auth</span>';
+      tr.appendChild(tdAuth);
+
+      // Actions cell
+      var tdActions = document.createElement('td');
+      tdActions.className = 'proxy-actions-cell';
+      tdActions.innerHTML =
+        '<button type="button" class="btn-table-icon" data-prx-action="test" data-prx-id="' + escapeHtml(p.id) + '" title="Test Ping">⚡</button>' +
+        '<button type="button" class="btn-table-icon" data-prx-action="copy" data-prx-id="' + escapeHtml(p.id) + '" title="Copy">📋</button>' +
+        '<button type="button" class="btn-table-icon btn-table-danger" data-prx-action="delete" data-prx-id="' + escapeHtml(p.id) + '" title="Delete">🗑</button>';
+      tr.appendChild(tdActions);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function handleImportBulkProxies() {
+    var area = $('proxyBulkInput');
+    var defType = $('bulkDefaultType') ? $('bulkDefaultType').value : 'http';
+    var text = area ? area.value.trim() : '';
+
+    if (!text) {
+      toast(currentLang === 'en' ? 'Please paste your proxy list.' : 'لطفاً لیست پروکسی‌ها را وارد نمایید.', 'error');
+      if (area) area.focus();
+      return;
+    }
+
+    var parsed = parseBulkProxies(text, defType);
+    if (!parsed.length) {
+      toast(t('noValidProxiesFound'), 'error');
+      return;
+    }
+
+    var addedCount = 0;
+    parsed.forEach(function (p) {
+      var exists = state.proxies.some(function (x) {
+        return x.host.toLowerCase() === p.host.toLowerCase() && String(x.port) === String(p.port);
+      });
+      if (!exists) {
+        state.proxies.push(p);
+        addedCount++;
+      }
+    });
+
+    saveProxiesList();
+    renderProxyTable();
+    if (area) area.value = '';
+    var bulkSec = $('proxyBulkImportSection');
+    if (bulkSec) bulkSec.hidden = true;
+
+    toast(t('proxiesImported', { count: toFaDigits(addedCount) }), 'success');
+  }
+
+  function openProxyManagerModal() {
+    var modal = $('proxyManagerModal');
+    if (modal) {
+      showOverlay(modal);
+      renderProxyTable();
+      updateProxyCounters();
+    }
+  }
+
+  function closeProxyManagerModal() {
+    var modal = $('proxyManagerModal');
+    if (modal) hideOverlay(modal);
   }
 
   /* ---------- Events & Setup ---------- */
@@ -1657,8 +2314,159 @@
     var nameInput = $('profileName');
     if (nameInput) nameInput.addEventListener('input', updateCharCount);
 
+    // Proxy Manager open / close
+    var btnHeaderPrx = $('btnHeaderProxies');
+    if (btnHeaderPrx) btnHeaderPrx.addEventListener('click', openProxyManagerModal);
+
+    var btnToolsPrx = $('btnToolsProxies');
+    if (btnToolsPrx) {
+      btnToolsPrx.addEventListener('click', function () {
+        closeAllDropdowns();
+        openProxyManagerModal();
+      });
+    }
+
+    var prxClose = $('proxyManagerClose');
+    if (prxClose) prxClose.addEventListener('click', closeProxyManagerModal);
+
+    var btnClosePrx = $('btnCloseProxyManager');
+    if (btnClosePrx) btnClosePrx.addEventListener('click', closeProxyManagerModal);
+
+    var prxModal = $('proxyManagerModal');
+    if (prxModal) {
+      prxModal.addEventListener('click', function (e) {
+        if (e.target === prxModal) closeProxyManagerModal();
+      });
+    }
+
+    // Proxy Manager actions
+    var btnTestAll = $('btnTestAllProxies');
+    if (btnTestAll) btnTestAll.addEventListener('click', testAllProxiesBatch);
+
+    var btnSortPing = $('btnSortProxiesByPing');
+    if (btnSortPing) btnSortPing.addEventListener('click', sortProxiesByPing);
+
+    var btnToggleBulk = $('btnToggleBulkImport');
+    var bulkSection = $('proxyBulkImportSection');
+    if (btnToggleBulk && bulkSection) {
+      btnToggleBulk.addEventListener('click', function () {
+        bulkSection.hidden = !bulkSection.hidden;
+        if (!bulkSection.hidden) {
+          var area = $('proxyBulkInput');
+          if (area) area.focus();
+        }
+      });
+    }
+
+    var btnEmptyAdd = $('btnEmptyAddProxies');
+    if (btnEmptyAdd && bulkSection) {
+      btnEmptyAdd.addEventListener('click', function () {
+        bulkSection.hidden = false;
+        var area = $('proxyBulkInput');
+        if (area) area.focus();
+      });
+    }
+
+    var btnCancelBulk = $('btnCancelBulkImport');
+    if (btnCancelBulk && bulkSection) {
+      btnCancelBulk.addEventListener('click', function () {
+        bulkSection.hidden = true;
+      });
+    }
+
+    var btnImportPrx = $('btnImportProxies');
+    if (btnImportPrx) btnImportPrx.addEventListener('click', handleImportBulkProxies);
+
+    var btnClearDead = $('btnClearDeadProxies');
+    if (btnClearDead) btnClearDead.addEventListener('click', removeDeadProxies);
+
+    var btnClearAllPrx = $('btnClearAllProxies');
+    if (btnClearAllPrx) btnClearAllPrx.addEventListener('click', clearAllProxies);
+
+    var prxFilter = $('proxyFilterInput');
+    if (prxFilter) {
+      prxFilter.addEventListener('input', function () {
+        state.proxyFilterQuery = prxFilter.value || '';
+        renderProxyTable();
+      });
+    }
+
+    // Proxy Table event delegation
+    var prxTableBody = $('proxyTableBody');
+    if (prxTableBody) {
+      prxTableBody.addEventListener('click', function (e) {
+        var target = e.target.closest('[data-prx-action]');
+        if (!target) return;
+        var action = target.getAttribute('data-prx-action');
+        var id = target.getAttribute('data-prx-id');
+        var proxy = state.proxies.find(function (p) { return p.id === id; });
+        if (!proxy) return;
+
+        if (action === 'test') {
+          target.disabled = true;
+          testSingleProxyItem(proxy).then(function () {
+            target.disabled = false;
+            saveProxiesList();
+            updateProxyCounters();
+          });
+        } else if (action === 'copy') {
+          var str = '';
+          if (proxy.username && proxy.password) {
+            str = (proxy.type || 'http') + '://' + encodeURIComponent(proxy.username) + ':' + encodeURIComponent(proxy.password) + '@' + proxy.host + ':' + proxy.port;
+          } else {
+            str = (proxy.type || 'http') + '://' + proxy.host + ':' + proxy.port;
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(str).then(function () {
+              toast(t('proxyCopied'), 'success');
+            });
+          }
+        } else if (action === 'delete') {
+          var idx = state.proxies.findIndex(function (p) { return p.id === id; });
+          if (idx !== -1) {
+            state.proxies.splice(idx, 1);
+            saveProxiesList();
+            renderProxyTable();
+            toast(t('proxyDeleted'), 'info');
+          }
+        }
+      });
+    }
+
+    // Profile Proxy Picker & Manager button from Profile
+    var picker = $('profileProxyPicker');
+    if (picker) {
+      picker.addEventListener('change', function () {
+        var val = picker.value;
+        if (!val) return;
+        var selected = state.proxies.find(function (x) { return x.id === val; });
+        if (selected) {
+          $('proxyType').value = selected.type || 'http';
+          $('proxyHost').value = selected.host;
+          $('proxyPort').value = String(selected.port);
+          $('proxyUser').value = selected.username || '';
+          $('proxyPass').value = selected.password || '';
+          toast(t('proxyAutoFilled'), 'success');
+        }
+      });
+    }
+
+    var btnOpenPrxFromProf = $('btnOpenProxyManagerFromProfile');
+    if (btnOpenPrxFromProf) {
+      btnOpenPrxFromProf.addEventListener('click', function () {
+        openProxyManagerModal();
+      });
+    }
+
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') closeProfileModal();
+      if (e.key === 'Escape') {
+        var prxModal = $('proxyManagerModal');
+        if (prxModal && !prxModal.hidden) {
+          closeProxyManagerModal();
+          return;
+        }
+        closeProfileModal();
+      }
     });
 
     var btnEmpty = $('btnEmptyNew');
@@ -1666,6 +2474,31 @@
 
     var btnNewCard = $('newProfileCard');
     if (btnNewCard) btnNewCard.addEventListener('click', function () { openProfileModal('create', null); });
+
+    var btnHeaderNew = $('btnHeaderNew');
+    if (btnHeaderNew) btnHeaderNew.addEventListener('click', function () { openProfileModal('create', null); });
+
+    var btnTools = $('btnToolsMenu');
+    var toolsMenu = $('toolsDropdown');
+    if (btnTools && toolsMenu) {
+      btnTools.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var wasHidden = toolsMenu.hidden;
+        closeAllDropdowns();
+        toolsMenu.hidden = !wasHidden;
+        btnTools.setAttribute('aria-expanded', wasHidden ? 'true' : 'false');
+      });
+    }
+
+    document.querySelectorAll('.modal-tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        switchModalTab(btn.getAttribute('data-tab'));
+      });
+    });
+
+    document.addEventListener('click', function () {
+      closeAllDropdowns();
+    });
 
     var btnTestProxy = $('btnTestProxy');
     if (btnTestProxy) btnTestProxy.addEventListener('click', handleTestProxy);
@@ -1736,6 +2569,7 @@
     updateCharCount();
     hideProgress();
     loadProfiles();
+    loadProxiesList();
     refreshChromiumStatus();
     setInterval(function () { refreshChromiumStatus(); }, 30000);
   }

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, safeStorage, session } = require('electron');
 const { spawn, execFile, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -28,6 +28,7 @@ function resolveDataDir() {
 
 let DATA_DIR = resolveDataDir();
 let PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
+let PROXIES_FILE = path.join(DATA_DIR, 'proxies.json');
 let SESSIONS_DIR = path.join(DATA_DIR, '.sessions');
 let LEGACY_PROFILES_DIR = path.join(DATA_DIR, 'profiles');
 let PROFILES_STORAGE_DIR = path.join(DATA_DIR, 'profiles_storage');
@@ -39,6 +40,7 @@ let STEALTH_CACHE_DIR = path.join(DATA_DIR, '.stealth-cache');
 function refreshPaths() {
   DATA_DIR = resolveDataDir();
   PROFILES_FILE = path.join(DATA_DIR, 'profiles.json');
+  PROXIES_FILE = path.join(DATA_DIR, 'proxies.json');
   SESSIONS_DIR = path.join(DATA_DIR, '.sessions');
   LEGACY_PROFILES_DIR = path.join(DATA_DIR, 'profiles');
   PROFILES_STORAGE_DIR = path.join(DATA_DIR, 'profiles_storage');
@@ -293,19 +295,19 @@ function generateSmartFingerprint(custom = {}) {
 function cleanFingerprint(raw) {
   if (!raw || typeof raw !== 'object') return generateSmartFingerprint();
   const def = generateSmartFingerprint(raw);
-  const rawTz = String(raw.timezone || def.timezone).slice(0, 50);
+  const rawTz = String(raw.timezone || def.timezone).replace(/[^a-zA-Z0-9/_+\-]/g, '').slice(0, 50);
   const tzOffset = getTimezoneOffsetFor(rawTz);
   return {
     os: ['windows', 'mac', 'linux'].includes(raw.os) ? raw.os : def.os,
-    platform: String(raw.platform || def.platform).slice(0, 30),
-    userAgent: String(raw.userAgent || def.userAgent).slice(0, 300),
-    hardwareConcurrency: (Number(raw.hardwareConcurrency) > 0) ? Number(raw.hardwareConcurrency) : def.hardwareConcurrency,
-    deviceMemory: (Number(raw.deviceMemory) > 0) ? Number(raw.deviceMemory) : def.deviceMemory,
+    platform: String(raw.platform || def.platform).replace(/[\x00-\x1f\x7f\r\n]/g, '').slice(0, 30),
+    userAgent: String(raw.userAgent || def.userAgent).replace(/[\x00-\x1f\x7f\r\n]/g, '').slice(0, 300),
+    hardwareConcurrency: (Number(raw.hardwareConcurrency) > 0) ? Math.min(128, Math.max(1, Number(raw.hardwareConcurrency))) : def.hardwareConcurrency,
+    deviceMemory: (Number(raw.deviceMemory) > 0) ? Math.min(256, Math.max(1, Number(raw.deviceMemory))) : def.deviceMemory,
     screenWidth: parseInt(raw.screenWidth, 10) || def.screenWidth,
     screenHeight: parseInt(raw.screenHeight, 10) || def.screenHeight,
-    webglVendor: String(raw.webglVendor || def.webglVendor).slice(0, 100),
-    webglRenderer: String(raw.webglRenderer || def.webglRenderer).slice(0, 150),
-    webglGpuName: String(raw.webglGpuName || def.webglGpuName).slice(0, 60),
+    webglVendor: String(raw.webglVendor || def.webglVendor).replace(/[\x00-\x1f\x7f\r\n]/g, '').slice(0, 100),
+    webglRenderer: String(raw.webglRenderer || def.webglRenderer).replace(/[\x00-\x1f\x7f\r\n]/g, '').slice(0, 150),
+    webglGpuName: String(raw.webglGpuName || def.webglGpuName).replace(/[\x00-\x1f\x7f\r\n]/g, '').slice(0, 60),
     canvasNoise: raw.canvasNoise !== false,
     audioNoise: raw.audioNoise !== false,
     webglNoise: raw.webglNoise !== false,
@@ -313,7 +315,7 @@ function cleanFingerprint(raw) {
     webrtcPolicy: ['disable', 'disable_non_proxied_udp', 'default'].includes(raw.webrtcPolicy) ? raw.webrtcPolicy : 'disable_non_proxied_udp',
     timezone: rawTz,
     timezoneOffset: tzOffset,
-    language: String(raw.language || def.language).slice(0, 20),
+    language: String(raw.language || def.language).replace(/[^a-zA-Z0-9\-_,]/g, '').slice(0, 20),
     seed: Number(raw.seed) || def.seed
   };
 }
@@ -803,6 +805,74 @@ function buildStealthScript(fp) {
 `;
 }
 
+const ENC_PREFIX = 'enc:v1:';
+const ENC_V2_PREFIX = 'enc:v2:';
+
+let _derivedFallbackKey = null;
+function getFallbackEncryptionKey() {
+  if (_derivedFallbackKey) return _derivedFallbackKey;
+  try {
+    const seed = (os.hostname() || 'localhost') + '|' + ((os.userInfo && os.userInfo().username) || 'user') + '|PBProFallbackMachineSalt2026';
+    _derivedFallbackKey = crypto.pbkdf2Sync(seed, 'PBProFixedSaltKey2026', 100000, 32, 'sha256');
+    return _derivedFallbackKey;
+  } catch {
+    _derivedFallbackKey = crypto.createHash('sha256').update('PBProStaticFallbackKey2026').digest();
+    return _derivedFallbackKey;
+  }
+}
+
+function encryptSecret(plain) {
+  if (!plain) return '';
+  try {
+    if (app && app.isReady() && safeStorage && safeStorage.isEncryptionAvailable()) {
+      return ENC_PREFIX + safeStorage.encryptString(plain).toString('base64');
+    }
+  } catch {}
+
+  // Fallback to AES-256-GCM when safeStorage is not available
+  try {
+    const key = getFallbackEncryptionKey();
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    let enc = cipher.update(plain, 'utf8', 'base64');
+    enc += cipher.final('base64');
+    const tag = cipher.getAuthTag().toString('base64');
+    return `${ENC_V2_PREFIX}${iv.toString('base64')}:${tag}:${enc}`;
+  } catch {}
+
+  return plain;
+}
+
+function decryptSecret(cipherOrPlain) {
+  if (!cipherOrPlain) return '';
+  if (typeof cipherOrPlain === 'string') {
+    if (cipherOrPlain.startsWith(ENC_PREFIX)) {
+      try {
+        if (app && app.isReady() && safeStorage && safeStorage.isEncryptionAvailable()) {
+          const buf = Buffer.from(cipherOrPlain.slice(ENC_PREFIX.length), 'base64');
+          return safeStorage.decryptString(buf);
+        }
+      } catch {}
+    } else if (cipherOrPlain.startsWith(ENC_V2_PREFIX)) {
+      try {
+        const parts = cipherOrPlain.slice(ENC_V2_PREFIX.length).split(':');
+        if (parts.length === 3) {
+          const iv = Buffer.from(parts[0], 'base64');
+          const tag = Buffer.from(parts[1], 'base64');
+          const enc = parts[2];
+          const key = getFallbackEncryptionKey();
+          const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+          decipher.setAuthTag(tag);
+          let dec = decipher.update(enc, 'base64', 'utf8');
+          dec += decipher.final('utf8');
+          return dec;
+        }
+      } catch {}
+    }
+  }
+  return cipherOrPlain;
+}
+
 function loadProfiles() {
   ensureDataDir();
   try {
@@ -813,6 +883,14 @@ function loadProfiles() {
       if (!p.fingerprint) {
         p.fingerprint = generateSmartFingerprint();
         updated = true;
+      }
+      if (p.proxy && p.proxy.password) {
+        const decrypted = decryptSecret(p.proxy.password);
+        if (decrypted !== p.proxy.password) {
+          p.proxy.password = decrypted;
+        } else if (!p.proxy.password.startsWith(ENC_PREFIX) && !p.proxy.password.startsWith(ENC_V2_PREFIX)) {
+          updated = true;
+        }
       }
     }
     if (updated) saveProfiles(parsed);
@@ -831,13 +909,66 @@ function loadProfiles() {
 
 function saveProfiles(profiles) {
   ensureDataDir();
-  fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2), 'utf8');
+  const toSave = (Array.isArray(profiles) ? profiles : []).map((p) => {
+    if (!p.proxy || !p.proxy.password) return p;
+    return {
+      ...p,
+      proxy: {
+        ...p.proxy,
+        password: encryptSecret(p.proxy.password)
+      }
+    };
+  });
+  fs.writeFileSync(PROFILES_FILE, JSON.stringify(toSave, null, 2), 'utf8');
+}
+
+function loadProxies() {
+  ensureDataDir();
+  try {
+    if (!fs.existsSync(PROXIES_FILE)) return [];
+    const parsed = JSON.parse(fs.readFileSync(PROXIES_FILE, 'utf8'));
+    if (!Array.isArray(parsed)) return [];
+    let updated = false;
+    for (const prx of parsed) {
+      if (prx && prx.password) {
+        const decrypted = decryptSecret(prx.password);
+        if (decrypted !== prx.password) {
+          prx.password = decrypted;
+        } else if (!prx.password.startsWith(ENC_PREFIX) && !prx.password.startsWith(ENC_V2_PREFIX)) {
+          updated = true;
+        }
+      }
+    }
+    if (updated) saveProxies(parsed);
+    return parsed;
+  } catch (err) {
+    if (err && err.code !== 'ENOENT') {
+      try {
+        if (fs.existsSync(PROXIES_FILE)) {
+          fs.copyFileSync(PROXIES_FILE, path.join(DATA_DIR, `proxies.corrupt-${Date.now()}.json`));
+        }
+      } catch {}
+    }
+    return [];
+  }
+}
+
+function saveProxies(proxies) {
+  ensureDataDir();
+  const toSave = (Array.isArray(proxies) ? proxies : []).map((prx) => {
+    if (!prx || !prx.password) return prx;
+    return {
+      ...prx,
+      password: encryptSecret(prx.password)
+    };
+  });
+  fs.writeFileSync(PROXIES_FILE, JSON.stringify(toSave, null, 2), 'utf8');
 }
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 function cleanName(raw) {
-  const n = String(raw || '').trim().slice(0, 60);
+  const n = String(raw || '').replace(/[\x00-\x1f\x7f\r\n]/g, '').trim().slice(0, 60);
   return n || 'Untitled Profile';
 }
 
@@ -847,13 +978,13 @@ function cleanColor(raw) {
 }
 
 function cleanStartupUrl(raw) {
-  const u = String(raw || '').trim();
+  const u = String(raw || '').replace(/[\x00-\x1f\x7f\r\n]/g, '').trim();
   if (!u) return '';
   const withProto = /^https?:\/\//i.test(u) ? u : 'https://' + u;
   try {
     const parsed = new URL(withProto);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
-    return withProto;
+    return parsed.href;
   } catch {
     return '';
   }
@@ -863,7 +994,7 @@ function cleanProxy(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const enabled = raw.enabled !== false;
   if (!enabled) return null;
-  let host = String(raw.host || '').trim();
+  let host = String(raw.host || '').replace(/[\x00-\x1f\x7f\r\n]/g, '').trim();
   if (!host) return null;
   host = host.replace(/^https?:\/\//i, '').replace(/^socks5?:\/\//i, '').split('/')[0].trim();
   if (!host || host.length > 255 || /\s/.test(host)) return null;
@@ -871,23 +1002,24 @@ function cleanProxy(raw) {
   const port = parseInt(String(raw.port || '').trim(), 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
   const type = (raw.type === 'socks5') ? 'socks5' : 'http';
-  const username = String(raw.username || '').trim().slice(0, 100);
-  const password = String(raw.password || '').trim().slice(0, 100);
+  const username = String(raw.username || '').replace(/[\x00-\x1f\x7f\r\n]/g, '').trim().slice(0, 100);
+  const password = String(raw.password || '').replace(/[\x00-\x1f\x7f\r\n]/g, '').trim().slice(0, 100);
   return { enabled: true, type, host, port, username, password };
 }
 
 function cleanTags(raw) {
+  const sanitizeTag = (t) => String(t || '').replace(/[\x00-\x1f\x7f\r\n]/g, '').trim().slice(0, 30);
   if (Array.isArray(raw)) {
-    return raw.map(t => String(t).trim()).filter(Boolean).slice(0, 10);
+    return raw.map(sanitizeTag).filter(Boolean).slice(0, 10);
   }
   if (typeof raw === 'string') {
-    return raw.split(/[,،]/).map(t => t.trim()).filter(Boolean).slice(0, 10);
+    return raw.split(/[,،]/).map(sanitizeTag).filter(Boolean).slice(0, 10);
   }
   return [];
 }
 
 function cleanNotes(raw) {
-  return String(raw || '').trim().slice(0, 2000);
+  return String(raw || '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '').trim().slice(0, 2000);
 }
 
 /* Base Anti-Detection Flags */
@@ -956,16 +1088,73 @@ function broadcastRunning() {
   }
 }
 
+function isValidProfileId(id) {
+  return typeof id === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(id);
+}
+
+function isTrustedSender(e) {
+  if (!e || !e.sender) return false;
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  return e.sender === mainWindow.webContents && e.senderFrame === mainWindow.webContents.mainFrame;
+}
+
+function isSafeExternalUrl(rawUrl) {
+  if (typeof rawUrl !== 'string' || !rawUrl) return false;
+  if (/[\x00-\x1f\x7f]/.test(rawUrl)) return false;
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+    const host = u.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0' || host.endsWith('.local')) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isLocalAddress(addr) {
+  if (!addr || typeof addr !== 'string') return false;
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1';
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function cleanCliArg(val) {
+  if (typeof val !== 'string') return '';
+  return val.replace(/[\x00-\x1f\x7f\r\n"]/g, '').trim();
+}
+
+function isSafeDirToDelete(dir) {
+  if (!dir || typeof dir !== 'string') return false;
+  const resolved = path.resolve(dir);
+  const resolvedSessions = path.resolve(SESSIONS_DIR) + path.sep;
+  const resolvedStorage = path.resolve(PROFILES_STORAGE_DIR) + path.sep;
+  const resolvedLegacy = path.resolve(LEGACY_PROFILES_DIR) + path.sep;
+  return resolved.startsWith(resolvedSessions) ||
+         resolved.startsWith(resolvedStorage) ||
+         resolved.startsWith(resolvedLegacy);
+}
+
 function safeRmSessionDir(dir) {
   try {
-    if (dir && (dir.startsWith(SESSIONS_DIR) || dir.startsWith(PROFILES_STORAGE_DIR)) && fs.existsSync(dir)) {
+    if (isSafeDirToDelete(dir) && fs.existsSync(dir)) {
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
     }
   } catch {}
 }
 
 async function safeRmSessionDirAsync(dir, retries = 5, delay = 500) {
-  if (!dir || (!dir.startsWith(SESSIONS_DIR) && !dir.startsWith(PROFILES_STORAGE_DIR))) return;
+  if (!isSafeDirToDelete(dir)) return;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       if (fs.existsSync(dir)) {
@@ -987,6 +1176,10 @@ async function safeRmSessionDirAsync(dir, retries = 5, delay = 500) {
 function createProxyBridge(upstream) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
+      if (!req.socket || !isLocalAddress(req.socket.remoteAddress)) {
+        if (req.socket) req.socket.destroy();
+        return;
+      }
       if (upstream.type === 'socks5') {
         handleBridgeSocks5Http(req, res, upstream);
       } else {
@@ -995,6 +1188,10 @@ function createProxyBridge(upstream) {
     });
 
     server.on('connect', (req, clientSocket, head) => {
+      if (!clientSocket || !isLocalAddress(clientSocket.remoteAddress)) {
+        if (clientSocket) clientSocket.destroy();
+        return;
+      }
       if (upstream.type === 'socks5') {
         handleBridgeSocks5Connect(req, clientSocket, head, upstream);
       } else {
@@ -1093,6 +1290,10 @@ function sendBridgeSocks5Connect(socket, host, port) {
     ]));
   } else {
     const hostBuf = Buffer.from(host, 'utf8');
+    if (hostBuf.length > 255) {
+      socket.destroy();
+      return;
+    }
     socket.write(Buffer.concat([
       Buffer.from([0x05, 0x01, 0x00, 0x03, hostBuf.length]),
       hostBuf,
@@ -1277,7 +1478,8 @@ async function launchProfile(profile) {
 <html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
-  <title>${profile.name || 'Private Browser'} - Start Page</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; font-src 'self'; form-action 'self' https:;">
+  <title>${escapeHtml(profile.name || 'Private Browser')} - Start Page</title>
   <link rel="icon" type="image/x-icon" href="icon.ico">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1389,14 +1591,14 @@ async function launchProfile(profile) {
   <div class="container">
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px;">
       <img src="icon.ico" alt="Logo" style="width:42px;height:42px;border-radius:10px;object-fit:contain;">
-      <h1 style="margin:0;">${profile.name || 'Private Browser'}</h1>
+      <h1 style="margin:0;">${escapeHtml(profile.name || 'Private Browser')}</h1>
     </div>
     <div class="badge-row">
       <span class="badge">🛡️ Privacy Shield Protection</span>
       <span class="badge badge-mode">${isPersistent ? '💾 Persistent Storage' : '⚡ Incognito (Ephemeral)'}</span>
     </div>
     <p class="subtitle">Isolated fingerprint, network tunnel, and anti-detect spoofing active.</p>
-    <form class="search-box" onsubmit="event.preventDefault(); const q = document.getElementById('searchInp').value.trim(); if(q) location.href = (q.startsWith('http') ? q : 'https://duckduckgo.com/?q=' + encodeURIComponent(q));">
+    <form class="search-box" onsubmit="event.preventDefault(); const q = document.getElementById('searchInp').value.trim(); if(q) location.href = (/^https?:\\/\\//i.test(q) ? q : 'https://duckduckgo.com/?q=' + encodeURIComponent(q));">
       <input id="searchInp" type="text" placeholder="Search the web or enter URL..." autofocus>
       <button type="submit">Go</button>
     </form>
@@ -1416,19 +1618,19 @@ async function launchProfile(profile) {
     <div class="grid">
       <div class="spec-item">
         <div class="spec-label">Operating System & Platform</div>
-        <div class="spec-val">${fp.os === 'linux' ? 'Linux' : (fp.os === 'mac' ? 'macOS' : 'Windows')} (${fp.platform || 'Win32'})</div>
+        <div class="spec-val">${escapeHtml(fp.os === 'linux' ? 'Linux' : (fp.os === 'mac' ? 'macOS' : 'Windows'))} (${escapeHtml(fp.platform || 'Win32')})</div>
       </div>
       <div class="spec-item">
         <div class="spec-label">CPU Cores & Device Memory</div>
-        <div class="spec-val">${fp.hardwareConcurrency || 8} Cores / ${fp.deviceMemory || 8} GB RAM</div>
+        <div class="spec-val">${escapeHtml(String(fp.hardwareConcurrency || 8))} Cores / ${escapeHtml(String(fp.deviceMemory || 8))} GB RAM</div>
       </div>
       <div class="spec-item">
         <div class="spec-label">WebGL Graphics Card</div>
-        <div class="spec-val">${fp.webglGpuName || 'NVIDIA GeForce RTX 4070'}</div>
+        <div class="spec-val">${escapeHtml(fp.webglGpuName || 'NVIDIA GeForce RTX 4070')}</div>
       </div>
       <div class="spec-item">
         <div class="spec-label">Timezone & Language</div>
-        <div class="spec-val">${fp.timezone || 'America/New_York'} (${fp.language || 'en-US'})</div>
+        <div class="spec-val">${escapeHtml(fp.timezone || 'America/New_York')} (${escapeHtml(fp.language || 'en-US')})</div>
       </div>
     </div>
   </div>
@@ -1552,18 +1754,19 @@ async function launchProfile(profile) {
     args.push('--disk-cache-size=1', '--media-cache-size=1');
   }
 
-  if (fp.userAgent) args.push(`--user-agent=${fp.userAgent}`);
-  if (fp.screenWidth && fp.screenHeight) args.push(`--window-size=${fp.screenWidth},${fp.screenHeight}`);
+  if (fp.userAgent) args.push(`--user-agent=${cleanCliArg(fp.userAgent)}`);
+  if (fp.screenWidth && fp.screenHeight) args.push(`--window-size=${parseInt(fp.screenWidth, 10) || 1920},${parseInt(fp.screenHeight, 10) || 1080}`);
   if (fp.language) {
-    args.push(`--lang=${fp.language}`);
-    args.push(`--accept-lang=${fp.language}`);
+    const lang = cleanCliArg(fp.language);
+    args.push(`--lang=${lang}`);
+    args.push(`--accept-lang=${lang}`);
   }
   if (fp.timezone) {
-    args.push(`--timezone=${fp.timezone}`);
+    args.push(`--timezone=${cleanCliArg(fp.timezone)}`);
   }
 
   const targetUrl = cleanStartupUrl(profile.startupUrl) || require('url').pathToFileURL(path.join(extDir, 'newtab.html')).href;
-  args.push(targetUrl);
+  args.push('--', targetUrl);
 
   let child;
   try {
@@ -1572,6 +1775,12 @@ async function launchProfile(profile) {
       GOOGLE_DEFAULT_CLIENT_ID: 'no',
       GOOGLE_DEFAULT_CLIENT_SECRET: 'no'
     });
+    delete spawnEnv.HTTP_PROXY;
+    delete spawnEnv.HTTPS_PROXY;
+    delete spawnEnv.ALL_PROXY;
+    delete spawnEnv.http_proxy;
+    delete spawnEnv.https_proxy;
+    delete spawnEnv.all_proxy;
     child = spawn(bin, args, { stdio: 'ignore', env: spawnEnv });
   } catch (err) {
     if (bridge && typeof bridge.close === 'function') {
@@ -1592,7 +1801,7 @@ async function launchProfile(profile) {
 function killTree(child) {
   if (!child || child.killed) return;
   try {
-    if (process.platform === 'win32' && child.pid) {
+    if (process.platform === 'win32' && typeof child.pid === 'number' && Number.isInteger(child.pid) && child.pid > 0) {
       try {
         execFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { timeout: 8000 }, () => {});
         return;
@@ -1644,6 +1853,7 @@ function cleanStaleSessions() {
 }
 
 function wipeProfile(profileId) {
+  if (!isValidProfileId(profileId)) return false;
   stopProfile(profileId);
   const profiles = loadProfiles();
   const p = profiles.find((x) => x.id === profileId);
@@ -1700,6 +1910,9 @@ function fetchText(url, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 5) return reject(new Error('تغییر مسیر بیش از حد'));
     const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') {
+      return reject(new Error('درخواست تنها از طریق پروتکل امن HTTPS مجاز است'));
+    }
     const options = {
       hostname: parsed.hostname,
       path: parsed.pathname + parsed.search,
@@ -1712,7 +1925,12 @@ function fetchText(url, redirects = 0) {
     const req = https.get(options, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        return resolve(fetchText(res.headers.location, redirects + 1));
+        const nextUrl = new URL(res.headers.location, url).href;
+        const nextParsed = new URL(nextUrl);
+        if (nextParsed.protocol !== 'https:') {
+          return reject(new Error('تغییر مسیر به پروتکل غیر امن HTTPS مسدود شد'));
+        }
+        return resolve(fetchText(nextUrl, redirects + 1));
       }
       if (res.statusCode !== 200) {
         res.resume();
@@ -1734,10 +1952,12 @@ function downloadFile(url, dest, progressCb, redirects = 0) {
     if (redirects > 8) return reject(new Error('تغییر مسیر بیش از حد'));
     try { if (fs.existsSync(dest) && redirects === 0) fs.rmSync(dest, { force: true }); } catch {}
     const parsed = new URL(url);
-    const transport = parsed.protocol === 'http:' ? http : https;
+    if (parsed.protocol !== 'https:') {
+      return reject(new Error('دانلود تنها از طریق پروتکل امن HTTPS مجاز است'));
+    }
     const options = {
       hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === 'http:' ? 80 : 443),
+      port: parsed.port || 443,
       path: parsed.pathname + parsed.search,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
@@ -1745,10 +1965,14 @@ function downloadFile(url, dest, progressCb, redirects = 0) {
       },
       timeout: 45000
     };
-    const req = transport.get(options, (res) => {
+    const req = https.get(options, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         const nextUrl = new URL(res.headers.location, url).href;
+        const nextParsed = new URL(nextUrl);
+        if (nextParsed.protocol !== 'https:') {
+          return reject(new Error('تغییر مسیر به پروتکل غیر امن HTTPS مسدود شد'));
+        }
         return resolve(downloadFile(nextUrl, dest, progressCb, redirects + 1));
       }
       if (res.statusCode !== 200) {
@@ -1882,6 +2106,11 @@ async function downloadChromium(progressCb, force = false) {
 
     const inner = findChromeDir(tmpDir);
     if (!inner) throw new Error('فایل اجرایی کرومیوم در بسته دانلودشده پیدا نشد');
+    const resolvedInner = path.resolve(inner);
+    const resolvedTmpDir = path.resolve(tmpDir);
+    if (!resolvedInner.startsWith(resolvedTmpDir + path.sep) && resolvedInner !== resolvedTmpDir) {
+      throw new Error('مسیر فایل‌های استخراج‌شده نامعتبر است');
+    }
 
     try { if (fs.existsSync(CHROMIUM_DIR)) fs.rmSync(CHROMIUM_DIR, { recursive: true, force: true }); } catch {}
     try {
@@ -1926,10 +2155,10 @@ function createWindow() {
   }
 
   const win = new BrowserWindow({
-    width: 1060,
-    height: 740,
-    minWidth: 800,
-    minHeight: 560,
+    width: 1100,
+    height: 780,
+    minWidth: 700,
+    minHeight: 520,
     autoHideMenuBar: true,
     title: 'Private Browser Pro — Anti-Detect & Isolated Engine',
     backgroundColor: '#0c0e12',
@@ -1937,9 +2166,42 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      nodeIntegrationInWorker: false,
+      nodeIntegrationInSubFrames: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      navigateOnDragDrop: false,
+      spellcheck: false
     }
   });
+
+  // Prevent navigation away from the local app interface
+  win.webContents.on('will-navigate', (event, navigationUrl) => {
+    try {
+      const parsed = new URL(navigationUrl);
+      if (parsed.protocol !== 'file:' && navigationUrl !== 'about:blank') {
+        event.preventDefault();
+      }
+    } catch {
+      event.preventDefault();
+    }
+  });
+
+  // Intercept new window requests - open safe external URLs with system browser, deny popups
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isSafeExternalUrl(url)) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  // Block unauthorized webviews
+  win.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+  });
+
   win.loadFile('index.html');
   win.on('closed', () => { if (mainWindow === win) mainWindow = null; });
   return win;
@@ -1958,6 +2220,29 @@ if (app && typeof app.requestSingleInstanceLock === 'function') {
     });
 
     app.whenReady().then(() => {
+      // Permission lockdown in manager process
+      if (session && session.defaultSession) {
+        session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+          callback(false);
+        });
+        session.defaultSession.setPermissionCheckHandler(() => false);
+
+        // Security headers & CSP enforcement
+        session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+          callback({
+            responseHeaders: {
+              ...details.responseHeaders,
+              'Content-Security-Policy': [
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://ipwho.is https://ipapi.co; object-src 'none'; base-uri 'none'; form-action 'self';"
+              ],
+              'X-Content-Type-Options': ['nosniff'],
+              'X-Frame-Options': ['DENY'],
+              'Referrer-Policy': ['no-referrer']
+            }
+          });
+        });
+      }
+
       cleanStaleSessions();
       mainWindow = createWindow();
       app.on('activate', () => {
@@ -1990,74 +2275,86 @@ if (typeof module !== 'undefined' && module.exports) {
 /* ==================== IPC Handlers ==================== */
 
 if (ipcMain && typeof ipcMain.handle === 'function') {
-  ipcMain.handle('profiles:list', () => loadProfiles());
+  ipcMain.handle('profiles:list', (e) => {
+    if (!isTrustedSender(e)) return [];
+    return loadProfiles();
+  });
 
-ipcMain.handle('profiles:create', (e, p) => {
-  const src = (p && typeof p === 'object') ? p : {};
-  const profiles = loadProfiles();
-  const profile = {
-    id: 'p' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
-    name: cleanName(src.name),
-    color: cleanColor(src.color),
-    startupUrl: cleanStartupUrl(src.startupUrl),
-    proxy: cleanProxy(src.proxy),
-    fingerprint: cleanFingerprint(src.fingerprint),
-    saveData: src.saveData !== false,
-    tags: cleanTags(src.tags),
-    notes: cleanNotes(src.notes),
-    createdAt: Date.now(),
-    lastLaunched: null
-  };
-  profiles.push(profile);
-  saveProfiles(profiles);
-  return profile;
-});
+  ipcMain.handle('profiles:create', (e, p) => {
+    if (!isTrustedSender(e)) return null;
+    const src = (p && typeof p === 'object') ? p : {};
+    const profiles = loadProfiles();
+    const profile = {
+      id: 'p' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
+      name: cleanName(src.name),
+      color: cleanColor(src.color),
+      startupUrl: cleanStartupUrl(src.startupUrl),
+      proxy: cleanProxy(src.proxy),
+      fingerprint: cleanFingerprint(src.fingerprint),
+      saveData: src.saveData !== false,
+      tags: cleanTags(src.tags),
+      notes: cleanNotes(src.notes),
+      createdAt: Date.now(),
+      lastLaunched: null
+    };
+    profiles.push(profile);
+    saveProfiles(profiles);
+    return profile;
+  });
 
-ipcMain.handle('profiles:update', (e, id, updates) => {
-  const src = (updates && typeof updates === 'object') ? updates : {};
-  const profiles = loadProfiles();
-  const idx = profiles.findIndex((x) => x.id === id);
-  if (idx === -1) return null;
-  if (typeof src.name === 'string') profiles[idx].name = cleanName(src.name);
-  if (typeof src.color === 'string') profiles[idx].color = cleanColor(src.color);
-  if (typeof src.startupUrl === 'string') profiles[idx].startupUrl = cleanStartupUrl(src.startupUrl);
-  if ('proxy' in src) profiles[idx].proxy = cleanProxy(src.proxy);
-  if ('fingerprint' in src) profiles[idx].fingerprint = cleanFingerprint(src.fingerprint);
-  if ('saveData' in src) profiles[idx].saveData = src.saveData !== false;
-  if ('tags' in src) profiles[idx].tags = cleanTags(src.tags);
-  if ('notes' in src) profiles[idx].notes = cleanNotes(src.notes);
-  saveProfiles(profiles);
-  return profiles[idx];
-});
+  ipcMain.handle('profiles:update', (e, id, updates) => {
+    if (!isTrustedSender(e)) return null;
+    const pid = String(id || '');
+    if (!isValidProfileId(pid)) return null;
+    const src = (updates && typeof updates === 'object') ? updates : {};
+    const profiles = loadProfiles();
+    const idx = profiles.findIndex((x) => x.id === pid);
+    if (idx === -1) return null;
+    if (typeof src.name === 'string') profiles[idx].name = cleanName(src.name);
+    if (typeof src.color === 'string') profiles[idx].color = cleanColor(src.color);
+    if (typeof src.startupUrl === 'string') profiles[idx].startupUrl = cleanStartupUrl(src.startupUrl);
+    if ('proxy' in src) profiles[idx].proxy = cleanProxy(src.proxy);
+    if ('fingerprint' in src) profiles[idx].fingerprint = cleanFingerprint(src.fingerprint);
+    if ('saveData' in src) profiles[idx].saveData = src.saveData !== false;
+    if ('tags' in src) profiles[idx].tags = cleanTags(src.tags);
+    if ('notes' in src) profiles[idx].notes = cleanNotes(src.notes);
+    saveProfiles(profiles);
+    return profiles[idx];
+  });
 
-ipcMain.handle('profiles:delete', (e, id) => {
-  const pid = String(id || '');
-  stopProfile(pid);
-  saveProfiles(loadProfiles().filter((x) => x.id !== pid));
-  try {
-    ensureDataDir();
-    const persistent = path.join(PROFILES_STORAGE_DIR, pid);
-    if (fs.existsSync(persistent)) safeRmSessionDirAsync(persistent);
-    if (fs.existsSync(SESSIONS_DIR)) {
-      const entries = fs.readdirSync(SESSIONS_DIR);
-      for (const name of entries) {
-        if (name.includes(`-${pid}-`)) safeRmSessionDirAsync(path.join(SESSIONS_DIR, name));
+  ipcMain.handle('profiles:delete', (e, id) => {
+    if (!isTrustedSender(e)) return false;
+    const pid = String(id || '');
+    if (!isValidProfileId(pid)) return false;
+    stopProfile(pid);
+    saveProfiles(loadProfiles().filter((x) => x.id !== pid));
+    try {
+      ensureDataDir();
+      const persistent = path.join(PROFILES_STORAGE_DIR, pid);
+      if (fs.existsSync(persistent)) safeRmSessionDirAsync(persistent);
+      if (fs.existsSync(SESSIONS_DIR)) {
+        const entries = fs.readdirSync(SESSIONS_DIR);
+        for (const name of entries) {
+          if (name.includes(`-${pid}-`)) safeRmSessionDirAsync(path.join(SESSIONS_DIR, name));
+        }
       }
-    }
-    const legacy = path.join(LEGACY_PROFILES_DIR, pid);
-    if (fs.existsSync(legacy)) fs.rmSync(legacy, { recursive: true, force: true });
-  } catch {}
-  return true;
-});
+      const legacy = path.join(LEGACY_PROFILES_DIR, pid);
+      if (fs.existsSync(legacy)) safeRmSessionDir(legacy);
+    } catch {}
+    return true;
+  });
 
-ipcMain.handle('profiles:clone', (e, id) => {
-  const profiles = loadProfiles();
-  const p = profiles.find((x) => x.id === id);
-  if (!p) return null;
-  const clone = {
-    id: 'p' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
-    name: cleanName(p.name + ' (کپی)'),
-    color: cleanColor(p.color),
+  ipcMain.handle('profiles:clone', (e, id) => {
+    if (!isTrustedSender(e)) return null;
+    const pid = String(id || '');
+    if (!isValidProfileId(pid)) return null;
+    const profiles = loadProfiles();
+    const p = profiles.find((x) => x.id === pid);
+    if (!p) return null;
+    const clone = {
+      id: 'p' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
+      name: cleanName(p.name + ' (کپی)'),
+      color: cleanColor(p.color),
     startupUrl: cleanStartupUrl(p.startupUrl),
     proxy: p.proxy ? JSON.parse(JSON.stringify(p.proxy)) : null,
     fingerprint: generateSmartFingerprint(p.fingerprint ? {
@@ -2078,6 +2375,124 @@ ipcMain.handle('profiles:clone', (e, id) => {
   return clone;
 });
 
+function countryCodeToFlag(code) {
+  if (!code || typeof code !== 'string' || code.length !== 2) return '🌐';
+  const c = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(c)) return '🌐';
+  const first = 127397 + c.charCodeAt(0);
+  const second = 127397 + c.charCodeAt(1);
+  return String.fromCodePoint(first, second);
+}
+
+function isPrivateIp(ip) {
+  if (!ip || typeof ip !== 'string') return false;
+  const s = ip.trim();
+  if (s === '127.0.0.1' || s === 'localhost' || s === '::1') return true;
+  if (s.startsWith('10.') || s.startsWith('192.168.')) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(s)) return true;
+  return false;
+}
+
+const ipGeoCache = new Map();
+
+function resolveFallbackIpCountry(ip) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+    }, 3000);
+
+    const req = http.get(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode`, {
+      timeout: 2500,
+      headers: { 'User-Agent': 'curl/7.68.0' }
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        clearTimeout(timer);
+        try {
+          const data = JSON.parse(body);
+          if (data && data.status === 'success') {
+            const country = data.country || 'Unknown';
+            const countryCode = (data.countryCode || '').toUpperCase();
+            const flag = countryCodeToFlag(countryCode) || '🌐';
+            return resolve({ country, countryCode, flag });
+          }
+        } catch {}
+        resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+      });
+    });
+
+    req.on('error', () => {
+      clearTimeout(timer);
+      resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      clearTimeout(timer);
+      resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+    });
+  });
+}
+
+function resolveIpCountry(ip) {
+  if (!ip || typeof ip !== 'string') return Promise.resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+  const clean = ip.trim();
+  if (isPrivateIp(clean)) {
+    return Promise.resolve({ country: 'Local Network', countryCode: 'LAN', flag: '🏠' });
+  }
+  const cached = ipGeoCache.get(clean);
+  if (cached && (Date.now() - cached.ts < 3600000)) {
+    return Promise.resolve({ country: cached.country, countryCode: cached.countryCode, flag: cached.flag });
+  }
+
+  return new Promise((resolve) => {
+    let finished = false;
+    const finish = (res) => {
+      if (finished) return;
+      finished = true;
+      ipGeoCache.set(clean, { ...res, ts: Date.now() });
+      resolve(res);
+    };
+
+    const timer = setTimeout(() => {
+      resolveFallbackIpCountry(clean).then(finish);
+    }, 4000);
+
+    const req = https.get(`https://ipwho.is/${encodeURIComponent(clean)}`, {
+      timeout: 3500,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        clearTimeout(timer);
+        try {
+          const data = JSON.parse(body);
+          if (data && data.success) {
+            const country = data.country || 'Unknown';
+            const countryCode = (data.country_code || '').toUpperCase();
+            const flag = (data.flag && data.flag.emoji) ? data.flag.emoji : (countryCodeToFlag(countryCode) || '🌐');
+            return finish({ country, countryCode, flag });
+          }
+        } catch {}
+        resolveFallbackIpCountry(clean).then(finish);
+      });
+    });
+
+    req.on('error', () => {
+      clearTimeout(timer);
+      resolveFallbackIpCountry(clean).then(finish);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      clearTimeout(timer);
+      resolveFallbackIpCountry(clean).then(finish);
+    });
+  });
+}
+
 function sendSocks5TestConnect(socket, host, port) {
   const hostBuf = Buffer.from(host, 'utf8');
   socket.write(Buffer.concat([
@@ -2094,6 +2509,13 @@ function testProxyConnection(p) {
 
   if (p.type === 'socks5') {
     return new Promise((resolve) => {
+      let resolved = false;
+      const finish = (res) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(res);
+      };
+
       const socket = net.createConnection({ host, port, timeout: 8000 }, () => {
         const hasAuth = !!(p.username && p.password);
         socket.write(hasAuth ? Buffer.from([0x05, 0x01, 0x02]) : Buffer.from([0x05, 0x01, 0x00]));
@@ -2103,17 +2525,17 @@ function testProxyConnection(p) {
       let stage = 'greeting';
       let httpBuf = '';
 
-      socket.on('data', (chunk) => {
+      socket.on('data', async (chunk) => {
         try {
           if (stage === 'greeting') {
             if (chunk[0] !== 0x05) {
               socket.destroy();
-              return resolve({ ok: false, error: 'سرور انتخابی پروتکل معتبر SOCKS5 نیست.' });
+              return finish({ ok: false, error: 'سرور انتخابی پروتکل معتبر SOCKS5 نیست.' });
             }
             const method = chunk[1];
             if (method === 0xFF) {
               socket.destroy();
-              return resolve({ ok: false, error: 'پروکسی نیازمند نام کاربری و کلمه عبور است.' });
+              return finish({ ok: false, error: 'پروکسی نیازمند نام کاربری و کلمه عبور است.' });
             }
             if (method === 0x02) {
               const u = Buffer.from(p.username || '', 'utf8');
@@ -2133,7 +2555,7 @@ function testProxyConnection(p) {
           } else if (stage === 'auth') {
             if (chunk[1] !== 0x00) {
               socket.destroy();
-              return resolve({ ok: false, error: 'نام کاربری یا کلمه عبور پروکسی SOCKS5 اشتباه است.' });
+              return finish({ ok: false, error: 'نام کاربری یا کلمه عبور پروکسی SOCKS5 اشتباه است.' });
             }
             stage = 'connect';
             sendSocks5TestConnect(socket, 'api.ipify.org', 80);
@@ -2148,7 +2570,7 @@ function testProxyConnection(p) {
                 0x06: 'مدت زمان اتصال منقضی شد (TTL expired)'
               };
               socket.destroy();
-              return resolve({
+              return finish({
                 ok: false,
                 error: 'پروکسی به اینترنت دسترسی ندارد: ' + (errMap[chunk[1]] || ('کد ' + chunk[1]))
               });
@@ -2168,17 +2590,18 @@ function testProxyConnection(p) {
                 const parsed = JSON.parse(httpBuf.slice(idx, endIdx + 1));
                 if (parsed && parsed.ip) extIp = parsed.ip;
               } catch {}
-              resolve({ ok: true, latencyMs: latency, type: 'socks5', ip: extIp });
+              const geo = await resolveIpCountry(extIp);
+              finish({ ok: true, latencyMs: latency, type: 'socks5', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag });
             }
           }
         } catch (err) {
           socket.destroy();
-          resolve({ ok: false, error: 'خطا در خواندن پاسخ پروکسی: ' + err.message });
+          finish({ ok: false, error: 'خطا در خواندن پاسخ پروکسی: ' + err.message });
         }
       });
 
-      socket.on('close', () => {
-        if (stage === 'http' && httpBuf) {
+      socket.on('close', async () => {
+        if (stage === 'http' && httpBuf && !resolved) {
           const latency = Date.now() - start;
           let extIp = host;
           try {
@@ -2189,17 +2612,18 @@ function testProxyConnection(p) {
               if (parsed && parsed.ip) extIp = parsed.ip;
             }
           } catch {}
-          resolve({ ok: true, latencyMs: latency, type: 'socks5', ip: extIp });
+          const geo = await resolveIpCountry(extIp);
+          finish({ ok: true, latencyMs: latency, type: 'socks5', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag });
         }
       });
 
       socket.on('timeout', () => {
         socket.destroy();
-        resolve({ ok: false, error: 'عدم پاسخگویی اینترنت از طریق پروکسی در ۸ ثانیه (Timeout)' });
+        finish({ ok: false, error: 'عدم پاسخگویی اینترنت از طریق پروکسی در ۸ ثانیه (Timeout)' });
       });
 
       socket.on('error', (err) => {
-        resolve({
+        finish({
           ok: false,
           error: 'خطا در اتصال به پورت پروکسی: ' + (err.code === 'ECONNREFUSED' ? 'پورت پروکسی بسته است یا برنامه VPN/V2Ray فعال نیست.' : err.message)
         });
@@ -2208,6 +2632,13 @@ function testProxyConnection(p) {
   } else {
     // HTTP Proxy test
     return new Promise((resolve) => {
+      let resolved = false;
+      const finish = (res) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(res);
+      };
+
       const headers = { 'Host': 'api.ipify.org', 'User-Agent': 'Mozilla/5.0' };
       if (p.username && p.password) {
         headers['Proxy-Authorization'] = 'Basic ' + Buffer.from(`${p.username}:${p.password}`).toString('base64');
@@ -2222,31 +2653,32 @@ function testProxyConnection(p) {
         timeout: 8000
       }, (res) => {
         if (res.statusCode === 407) {
-          return resolve({ ok: false, error: 'نام کاربری یا کلمه عبور پروکسی اشتباه است (Error 407: Proxy Authentication Required)' });
+          return finish({ ok: false, error: 'نام کاربری یا کلمه عبور پروکسی اشتباه است (Error 407: Proxy Authentication Required)' });
         }
         if (res.statusCode >= 500) {
-          return resolve({ ok: false, error: 'خطای سرور پروکسی در دسترسی به اینترنت (کد ' + res.statusCode + ')' });
+          return finish({ ok: false, error: 'خطای سرور پروکسی در دسترسی به اینترنت (کد ' + res.statusCode + ')' });
         }
         let body = '';
         res.on('data', chunk => body += chunk);
-        res.on('end', () => {
+        res.on('end', async () => {
           const latency = Date.now() - start;
           let extIp = host;
           try {
             const data = JSON.parse(body);
             if (data && data.ip) extIp = data.ip;
           } catch {}
-          resolve({ ok: true, latencyMs: latency, type: 'http', ip: extIp });
+          const geo = await resolveIpCountry(extIp);
+          finish({ ok: true, latencyMs: latency, type: 'http', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag });
         });
       });
 
       req.on('timeout', () => {
         req.destroy();
-        resolve({ ok: false, error: 'عدم دریافت پاسخ اینترنت از طریق پروکسی در ۸ ثانیه (Timeout)' });
+        finish({ ok: false, error: 'عدم دریافت پاسخ اینترنت از طریق پروکسی در ۸ ثانیه (Timeout)' });
       });
 
       req.on('error', (err) => {
-        resolve({
+        finish({
           ok: false,
           error: 'خطا در اتصال به پروکسی: ' + (err.code === 'ECONNREFUSED' ? 'پورت پروکسی بسته است.' : (err.message || err))
         });
@@ -2258,18 +2690,50 @@ function testProxyConnection(p) {
 }
 
 ipcMain.handle('proxy:test', async (e, proxyConfig) => {
+  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
   const p = cleanProxy(proxyConfig);
   if (!p) return { ok: false, error: 'مشخصات پروکسی ناقص است (آدرس یا پورت خالی است).' };
   return testProxyConnection(p);
 });
 
-ipcMain.handle('profiles:wipe', (e, id) => wipeProfile(String(id || '')));
+ipcMain.handle('proxies:list', (e) => {
+  if (!isTrustedSender(e)) return [];
+  return loadProxies();
+});
 
-ipcMain.handle('profiles:wipeAll', () => wipeAllSessions());
+ipcMain.handle('proxies:save', (e, list) => {
+  if (!isTrustedSender(e)) return false;
+  if (!Array.isArray(list)) return false;
+  const sanitized = list.slice(0, 1000).map(cleanProxy).filter(Boolean);
+  saveProxies(sanitized);
+  return true;
+});
+
+ipcMain.handle('proxies:test', async (e, proxyConfig) => {
+  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
+  const p = cleanProxy(proxyConfig);
+  if (!p) return { ok: false, error: 'مشخصات پروکسی ناقص است (آدرس یا پورت خالی است).' };
+  return testProxyConnection(p);
+});
+
+ipcMain.handle('profiles:wipe', (e, id) => {
+  if (!isTrustedSender(e)) return false;
+  const pid = String(id || '');
+  if (!isValidProfileId(pid)) return false;
+  return wipeProfile(pid);
+});
+
+ipcMain.handle('profiles:wipeAll', (e) => {
+  if (!isTrustedSender(e)) return false;
+  return wipeAllSessions();
+});
 
 ipcMain.handle('profiles:randomizeFingerprint', (e, id) => {
+  if (!isTrustedSender(e)) return null;
+  const pid = String(id || '');
+  if (!isValidProfileId(pid)) return null;
   const profiles = loadProfiles();
-  const idx = profiles.findIndex((x) => x.id === id);
+  const idx = profiles.findIndex((x) => x.id === pid);
   if (idx === -1) return null;
   profiles[idx].fingerprint = generateSmartFingerprint();
   saveProfiles(profiles);
@@ -2277,8 +2741,11 @@ ipcMain.handle('profiles:randomizeFingerprint', (e, id) => {
 });
 
 ipcMain.handle('profiles:launch', async (e, id) => {
+  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
+  const pid = String(id || '');
+  if (!isValidProfileId(pid)) return { ok: false, error: 'INVALID_ID' };
   const profiles = loadProfiles();
-  const p = profiles.find((x) => x.id === id);
+  const p = profiles.find((x) => x.id === pid);
   if (!p) return { ok: false, error: 'NOT_FOUND' };
   const result = await launchProfile(p);
   if (result.ok) {
@@ -2288,11 +2755,20 @@ ipcMain.handle('profiles:launch', async (e, id) => {
   return result;
 });
 
-ipcMain.handle('profiles:stop', (e, id) => ({ stopped: stopProfile(String(id || '')) }));
+ipcMain.handle('profiles:stop', (e, id) => {
+  if (!isTrustedSender(e)) return { stopped: 0 };
+  const pid = String(id || '');
+  if (!isValidProfileId(pid)) return { stopped: 0 };
+  return { stopped: stopProfile(pid) };
+});
 
-ipcMain.handle('status:running', () => runningSnapshot());
+ipcMain.handle('status:running', (e) => {
+  if (!isTrustedSender(e)) return { running: [], counts: {} };
+  return runningSnapshot();
+});
 
-ipcMain.handle('status:chromium', () => {
+ipcMain.handle('status:chromium', (e) => {
+  if (!isTrustedSender(e)) return { found: false };
   const hasDownloaded = fs.existsSync(CHROMIUM_EXE);
   return {
     found: hasDownloaded,
@@ -2303,15 +2779,25 @@ ipcMain.handle('status:chromium', () => {
   };
 });
 
-ipcMain.handle('status:dataFolder', () => DATA_DIR);
-ipcMain.handle('status:openDataFolder', () => { shell.openPath(DATA_DIR); });
+ipcMain.handle('status:dataFolder', (e) => {
+  if (!isTrustedSender(e)) return '';
+  return DATA_DIR;
+});
+
+ipcMain.handle('status:openDataFolder', (e) => {
+  if (!isTrustedSender(e)) return;
+  shell.openPath(DATA_DIR);
+});
+
 ipcMain.handle('shell:openExternal', async (e, url) => {
-  if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+  if (!isTrustedSender(e)) return;
+  if (isSafeExternalUrl(url)) {
     return shell.openExternal(url);
   }
 });
 
 ipcMain.handle('chromium:download', async (e) => {
+  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
   const progress = (p) => {
     try {
       if (!e.sender.isDestroyed()) e.sender.send('chromium:progress', p);
@@ -2324,33 +2810,68 @@ ipcMain.handle('chromium:download', async (e) => {
   }
 });
 
-ipcMain.handle('ip:detect', async () => {
+ipcMain.handle('ip:detect', async (e) => {
+  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
   return new Promise((resolve) => {
-    const req = http.get('http://ip-api.com/json', { timeout: 6000 }, (res) => {
-      let d = '';
-      res.on('data', c => d += c);
-      res.on('end', () => {
-        try {
-          const info = JSON.parse(d);
-          if (info && info.status === 'success') {
-            return resolve({
-              ok: true,
-              ip: info.query,
-              country: info.country,
-              countryCode: info.countryCode,
-              city: info.city,
-              timezone: info.timezone,
-              isp: info.isp
-            });
-          }
-          resolve({ ok: false, error: 'Status not success' });
-        } catch (e) {
-          resolve({ ok: false, error: e.message });
+    const fetchHttps = (url, parseFn, onFail) => {
+      const req = https.get(url, { headers: { 'User-Agent': 'PrivateBrowserPro/1.0' }, timeout: 6000 }, (res) => {
+        if (res.statusCode !== 200) {
+          return onFail(new Error(`HTTP ${res.statusCode}`));
         }
+        let d = '';
+        res.on('data', (c) => { d += c; });
+        res.on('end', () => {
+          try {
+            const info = JSON.parse(d);
+            const parsed = parseFn(info);
+            if (parsed) return resolve({ ok: true, ...parsed });
+            onFail(new Error('Invalid response data'));
+          } catch (err) {
+            onFail(err);
+          }
+        });
       });
-      req.on('error', (e) => resolve({ ok: false, error: e.message }));
-      req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'TIMEOUT' }); });
-    });
+      req.on('error', onFail);
+      req.on('timeout', () => { req.destroy(); onFail(new Error('TIMEOUT')); });
+    };
+
+    fetchHttps(
+      'https://ipwho.is/',
+      (info) => {
+        if (info && info.success) {
+          return {
+            ip: info.ip,
+            country: info.country,
+            countryCode: info.country_code,
+            city: info.city,
+            timezone: info.timezone ? info.timezone.id : null,
+            isp: info.connection ? info.connection.isp : null
+          };
+        }
+        return null;
+      },
+      () => {
+        fetchHttps(
+          'https://ipapi.co/json/',
+          (info) => {
+            if (info && info.ip && !info.error) {
+              return {
+                ip: info.ip,
+                country: info.country_name,
+                countryCode: info.country_code,
+                city: info.city,
+                timezone: info.timezone,
+                isp: info.org
+              };
+            }
+            return null;
+          },
+          (err) => {
+            resolve({ ok: false, error: (err && err.message) || 'FAILED' });
+          }
+        );
+      }
+    );
   });
 });
 }

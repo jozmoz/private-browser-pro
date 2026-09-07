@@ -1,0 +1,31 @@
+{
+  "pass_number": 1,
+  "last_updated": "2026-09-07T11:02:00Z",
+  "vcs_info": {
+    "vcs_type": "git",
+    "commit_hash": "1119c029f9d0d442393c650bd4098285a791fcf4",
+    "branch": "main",
+    "dirty": true
+  },
+  "changed_files": [
+    "main.js",
+    "app/build.gradle.kts",
+    "app/src/main/AndroidManifest.xml",
+    "app/src/main/java/com/jozmoz/privatebrowser/data/AppDatabase.kt",
+    "app/src/main/java/com/jozmoz/privatebrowser/data/Profile.kt",
+    "app/src/main/java/com/jozmoz/privatebrowser/data/ProfileDao.kt",
+    "app/src/main/java/com/jozmoz/privatebrowser/net/ProxyTester.kt",
+    "app/src/main/java/com/jozmoz/privatebrowser/stealth/StealthScriptBuilder.kt",
+    "app/src/main/res/values-fa/strings.xml",
+    "app/src/main/res/values/colors.xml",
+    "app/src/main/res/values/strings.xml",
+    "app/src/main/res/values/themes.xml",
+    "app/src/main/res/xml/backup_rules.xml",
+    "app/src/main/res/xml/data_extraction_rules.xml",
+    "build.gradle.kts",
+    "gradle.properties",
+    "settings.gradle.kts"
+  ],
+  "changed_files_status": "UNKNOWN",
+  "changed_files_pass": 1
+}

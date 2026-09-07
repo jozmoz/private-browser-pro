@@ -1,0 +1,79 @@
+{
+  "id": "ce282f66-f474-4080-a267-e55d37ed5473",
+  "title": "Unrestricted Cleartext Network Traffic Permitted in Android Application Manifest",
+  "description": "In app/src/main/AndroidManifest.xml, the application sets `android:usesCleartextTraffic=\"true\"`. This configuration disables Android's default Network Security Config protections (enforced since Android 9 / API 28) which require HTTPS for all network operations. Consequently, WebViews and network connections within the application are permitted to transmit sensitive HTTP credentials and cookies in cleartext without TLS.",
+  "impact": "In-transit traffic interception and credential harvesting over unencrypted Wi-Fi and mobile networks.",
+  "severity": "LOW",
+  "privileges_required": "NONE",
+  "attacker_position": "EXTERNAL",
+  "user_interaction": "NONE",
+  "status": "FALSE_POSITIVE",
+  "code_paths": [
+    "app/src/main/AndroidManifest.xml:17"
+  ],
+  "cwe": "CWE-319",
+  "signature": "c58d322ac2749f2c",
+  "lineage_id": "61b92893-1fd7-4f4b-8836-ac48e2cb0e29",
+  "mitigation": "Set `android:usesCleartextTraffic=\"false\"` or configure a dedicated `network_security_config.xml` defining cleartext exceptions strictly for specific loopback proxies.",
+  "history": [
+    {
+      "stage": "researcher",
+      "action": "created",
+      "details": "Initial audit finding recorded from plan investigation.",
+      "pass_number": 1,
+      "timestamp": "2026-09-07T07:13:35Z"
+    },
+    {
+      "stage": "reviewer",
+      "action": "reviewed",
+      "details": "Determined status as FALSE_POSITIVE because Violates Rule 02 (Ignore Missing Hygiene / Defense-In-Depth) and Rule 04 (Avoid Pedantic Linting). Flagging `android:usesCleartextTraffic=\"true\"` is a generic static linter heuristic. In an anti-detect proxy browser, permitting cleartext HTTP traffic is an intended operational requirement to enable routing WebView traffic through unencrypted local or remote HTTP proxies.",
+      "pass_number": 1,
+      "snapshot": "",
+      "timestamp": "2026-09-07T07:15:04Z"
+    }
+  ],
+  "reasoning": "Violates Rule 02 (Ignore Missing Hygiene / Defense-In-Depth) and Rule 04 (Avoid Pedantic Linting). Flagging `android:usesCleartextTraffic=\"true\"` is a generic static linter heuristic. In an anti-detect proxy browser, permitting cleartext HTTP traffic is an intended operational requirement to enable routing WebView traffic through unencrypted local or remote HTTP proxies.",
+  "triage_checklist": {
+    "ignore_hypothetical_misuse": {
+      "outcome": "PASS"
+    },
+    "ignore_missing_hygiene": {
+      "outcome": "FAIL",
+      "reason": "Flagging manifest usesCleartextTraffic is a missing defense-in-depth hygiene report, not an exploitable flaw."
+    },
+    "require_strict_reproducibility": {
+      "outcome": "PASS"
+    },
+    "avoid_pedantic_linting": {
+      "outcome": "FAIL",
+      "reason": "Cleartext traffic is required by design to support local and remote HTTP proxy connections."
+    },
+    "no_security_flaw_stretching": {
+      "outcome": "PASS"
+    },
+    "evaluate_questionable_file_paths": {
+      "outcome": "PASS"
+    },
+    "ignore_resource_exhaustion_dos": {
+      "outcome": "PASS"
+    },
+    "intrinsic_security_flaws": {
+      "outcome": "PASS"
+    },
+    "verify_mitigations_pragmatically": {
+      "outcome": "PASS"
+    },
+    "refine_code_paths_strictly": {
+      "outcome": "PASS"
+    },
+    "ignore_simd_vector_padding": {
+      "outcome": "PASS"
+    },
+    "ensure_source_code_coherence": {
+      "outcome": "PASS"
+    },
+    "verify_attacker_control_of_source": {
+      "outcome": "PASS"
+    }
+  }
+}

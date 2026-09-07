@@ -1,0 +1,104 @@
+{
+  "investigations": [
+    {
+      "title": "Exhaustive Review: main.js (Process Execution & Lifecycle Management)",
+      "target_files": [
+        "main.js"
+      ],
+      "kb_references": [
+        "workspace/kb/entities/main_process.md",
+        "workspace/kb/vulnerabilities/CWE-78_Command-Injection.md",
+        "workspace/kb/vulnerabilities/CWE-22_Path-Traversal.md"
+      ],
+      "question": "Audit launchProfile(), killTree(), stopProfile(), and cleanStaleSessions() in main.js. Trace how process arguments, user-data-dir paths, and extension directory paths are synthesized when calling child_process.spawn('chrome.exe', args). Verify whether user-controlled fields (e.g., startupUrl, custom profile name, or resolution) can allow argument injection, flag override, or path traversal. Audit safeRmSessionDir() and safeRmSessionDirAsync() to ensure directory deletion is strictly confined to SESSIONS_DIR without traversing into arbitrary parent directories. Audit execFile('taskkill.exe') for argument injection vulnerabilities or uncaught error conditions."
+    },
+    {
+      "title": "Exhaustive Review: main.js (Local Proxy Tunnel Bridge & Anti-Leak Controls)",
+      "target_files": [
+        "main.js"
+      ],
+      "kb_references": [
+        "workspace/kb/entities/proxy_bridge.md",
+        "workspace/kb/vulnerabilities/CWE-200_Information-Exposure.md",
+        "workspace/kb/vulnerabilities/CWE-319_Cleartext-Transmission.md"
+      ],
+      "question": "Audit createProxyBridge(), connectBridgeSocks5Tunnel(), sendBridgeSocks5Connect(), and handleBridgeSocks5Http() in main.js. Verify whether the proxy forwarder strictly binds to 127.0.0.1 or if it could inadvertently listen on 0.0.0.0 or external interfaces. Trace RFC 1928/1929 SOCKS5 negotiation to confirm that domain names are resolved via SOCKS5 ATYP 0x03 (remote proxy resolution) rather than resolving locally on the host. Audit WebRTC policy flags (--force-webrtc-ip-handling-policy=disable_non_proxied_udp) and Chromium preferences to verify that non-proxied UDP STUN/TURN binding cannot leak the real IP address. Check how upstream proxy authentication credentials are transmitted and whether memory or socket errors leak credentials."
+    },
+    {
+      "title": "Exhaustive Review: preload.js & main.js (Context Isolation & IPC Boundary)",
+      "target_files": [
+        "preload.js",
+        "main.js"
+      ],
+      "kb_references": [
+        "workspace/kb/entities/ipc_interface.md",
+        "workspace/kb/vulnerabilities/CWE-78_Command-Injection.md",
+        "workspace/kb/vulnerabilities/CWE-22_Path-Traversal.md"
+      ],
+      "question": "Trace all ipcMain.handle() listeners in main.js exposed via preload.js contextBridge.exposeInMainWorld('api', ...). Audit shell:openExternal to verify that arbitrary or dangerous protocol schemes (e.g. file://, cmd:, powershell:, ms-appinstaller:) are strictly rejected. Audit profiles:wipe, profiles:delete, and profiles:launch to ensure that arbitrary profile ID values cannot be exploited for path traversal. Audit chromium:download to ensure untrusted download triggers cannot overwrite arbitrary files."
+    },
+    {
+      "title": "Exhaustive Review: main.js (Stealth Script Generation & Prototype Masking)",
+      "target_files": [
+        "main.js"
+      ],
+      "kb_references": [
+        "workspace/kb/entities/fingerprint_stealth.md",
+        "workspace/kb/vulnerabilities/CWE-94_Code-Injection.md",
+        "workspace/kb/vulnerabilities/CWE-200_Information-Exposure.md"
+      ],
+      "question": "Audit buildStealthScript(fp) and dynamic extension compilation (<sessionDir>/stealth-ext/manifest.json and stealth.js). Verify that all fingerprint properties (WebGL vendor/renderer strings, userAgent, platform, timezone) are safely serialized using JSON encoding and that no raw string concatenations allow breakout from JavaScript string literals into executable code in the browser's MAIN world. Audit Function.prototype.toString masking, navigator.userAgentData Client Hints emulation, and Canvas/Audio noise injections to determine whether prototype pollution, prototype property leakage, or timing side channels exist."
+    },
+    {
+      "title": "Exhaustive Review: data/profiles.json & main.js (Profile Storage & Sensitive Data Handling)",
+      "target_files": [
+        "main.js"
+      ],
+      "kb_references": [
+        "workspace/kb/entities/profile_manager.md",
+        "workspace/kb/vulnerabilities/CWE-319_Cleartext-Transmission.md",
+        "workspace/kb/vulnerabilities/CWE-22_Path-Traversal.md"
+      ],
+      "question": "Audit loadProfiles(), saveProfiles(), and sanitization helpers (cleanName, cleanColor, cleanStartupUrl, cleanProxy). Trace how upstream proxy passwords and usernames are written to data/profiles.json. Determine whether sensitive credentials are stored in unencrypted plaintext on disk. Audit corrupt profile recovery logic (profiles.corrupt-<timestamp>.json) to verify safe file naming and error handling."
+    },
+    {
+      "title": "Exhaustive Review: main.js (Chromium Binary Downloader & Zip Extraction)",
+      "target_files": [
+        "main.js"
+      ],
+      "kb_references": [
+        "workspace/kb/entities/chromium_engine_manager.md",
+        "workspace/kb/vulnerabilities/CWE-22_Path-Traversal.md",
+        "workspace/kb/vulnerabilities/CWE-78_Command-Injection.md"
+      ],
+      "question": "Audit the Chromium download and extraction routines in main.js. Trace the download URL resolution from GitHub release API and fallback mirrors. Verify the zip extraction implementation to determine if archive entry paths are validated against Zip Slip directory traversal vulnerabilities before files are written to disk. Check whether downloaded archives or binaries are cryptographically verified (e.g. hash checking) before execution."
+    },
+    {
+      "title": "Exhaustive Review: app/ (Android Mobile Subsystem & WebKit Proxy Overrides)",
+      "target_files": [
+        "app/src/main/java/com/jozmoz/privatebrowser/net/ProxyTester.kt",
+        "app/src/main/java/com/jozmoz/privatebrowser/stealth/StealthScriptBuilder.kt",
+        "app/src/main/java/com/jozmoz/privatebrowser/data/Profile.kt",
+        "app/src/main/AndroidManifest.xml"
+      ],
+      "kb_references": [
+        "workspace/kb/entities/android_subsystem.md",
+        "workspace/kb/vulnerabilities/CWE-319_Cleartext-Transmission.md",
+        "workspace/kb/vulnerabilities/CWE-94_Code-Injection.md",
+        "workspace/kb/vulnerabilities/CWE-200_Information-Exposure.md"
+      ],
+      "question": "Audit the companion Android implementation: ProxyController.setProxyOverride() in ProxyTester.kt, StealthScriptBuilder.kt script template generation, Room database storage in Profile.kt, and AndroidManifest.xml network configuration. Check if proxy credentials (proxyUser, proxyPass) are stored unencrypted in the local SQLite database. Verify that StealthScriptBuilder Kotlin string template interpolation cannot be abused for JavaScript code injection inside Android WebViews. Audit usesCleartextTraffic='true' in AndroidManifest.xml for unencrypted communication risks."
+    },
+    {
+      "title": "Exhaustive Review: renderer.js & index.html (Adversarial Sweep: UI Presentation Layer)",
+      "target_files": [
+        "renderer.js",
+        "index.html"
+      ],
+      "kb_references": [
+        "workspace/kb/entities/renderer_ui.md"
+      ],
+      "question": "Conduct an unconstrained adversarial sweep of renderer.js and index.html (normally classified as low-criticality). Trace how profile names, tags, proxy strings, and system status information are rendered into the DOM. Determine whether any innerHTML assignments, template interpolations, or dynamic event handlers permit DOM-based Cross-Site Scripting (XSS) or HTML injection from imported or corrupted profile datasets."
+    }
+  ]
+}
