@@ -809,6 +809,7 @@ const ENC_PREFIX = 'enc:v1:';
 const ENC_V2_PREFIX = 'enc:v2:';
 
 let _derivedFallbackKey = null;
+let _fallbackKeyWarningLogged = false;
 function getFallbackEncryptionKey() {
   if (_derivedFallbackKey) return _derivedFallbackKey;
   try {
@@ -829,7 +830,13 @@ function encryptSecret(plain) {
     }
   } catch {}
 
-  // Fallback to AES-256-GCM when safeStorage is not available
+  // Defense-in-depth fallback only: the derived key is recomputable by any
+  // same-user process, so enc:v2: is obfuscation against offline casual
+  // readers, NOT a security boundary against local malware.
+  if (!_fallbackKeyWarningLogged) {
+    _fallbackKeyWarningLogged = true;
+    try { console.warn('[security] safeStorage unavailable; proxy secrets use enc:v2: fallback (same-user readable)'); } catch {}
+  }
   try {
     const key = getFallbackEncryptionKey();
     const iv = crypto.randomBytes(12);
@@ -1136,13 +1143,26 @@ function cleanCliArg(val) {
 
 function isSafeDirToDelete(dir) {
   if (!dir || typeof dir !== 'string') return false;
-  const resolved = path.resolve(dir);
-  const resolvedSessions = path.resolve(SESSIONS_DIR) + path.sep;
-  const resolvedStorage = path.resolve(PROFILES_STORAGE_DIR) + path.sep;
-  const resolvedLegacy = path.resolve(LEGACY_PROFILES_DIR) + path.sep;
-  return resolved.startsWith(resolvedSessions) ||
-         resolved.startsWith(resolvedStorage) ||
-         resolved.startsWith(resolvedLegacy);
+  let resolved;
+  try {
+    resolved = path.resolve(dir);
+  } catch {
+    return false;
+  }
+  const roots = [SESSIONS_DIR, PROFILES_STORAGE_DIR, LEGACY_PROFILES_DIR];
+  for (const root of roots) {
+    if (!root || typeof root !== 'string') continue;
+    let resolvedRoot;
+    try {
+      resolvedRoot = path.resolve(root);
+    } catch {
+      continue;
+    }
+    if (resolved === resolvedRoot) return false;
+    const prefix = resolvedRoot.endsWith(path.sep) ? resolvedRoot : resolvedRoot + path.sep;
+    if (resolved.toLowerCase().startsWith(prefix.toLowerCase())) return true;
+  }
+  return false;
 }
 
 function safeRmSessionDir(dir) {
@@ -1441,6 +1461,8 @@ function cleanupLaunch(token) {
 
 async function launchProfile(profile) {
   if (!fs.existsSync(CHROMIUM_EXE)) return { ok: false, error: 'NO_BROWSER' };
+  if (!profile || typeof profile !== 'object') return { ok: false, error: 'INVALID_PROFILE' };
+  if (!isValidProfileId(profile.id)) return { ok: false, error: 'INVALID_ID' };
   const bin = CHROMIUM_EXE;
 
   const isPersistent = profile.saveData !== false;
@@ -1812,6 +1834,7 @@ function killTree(child) {
 }
 
 function stopProfile(profileId) {
+  if (!isValidProfileId(profileId)) return 0;
   let stopped = 0;
   for (const [token, rec] of running) {
     if (rec.profileId !== profileId) continue;
@@ -2396,41 +2419,55 @@ function isPrivateIp(ip) {
 const ipGeoCache = new Map();
 
 function resolveFallbackIpCountry(ip) {
+  // HTTPS-only fallback (CWE-319): the legacy cleartext geo endpoint was
+  // removed. The fallback below uses a TLS-capable free-tier geo API.
   return new Promise((resolve) => {
+    const done = (res) => resolve(res || { country: 'Unknown', countryCode: '', flag: '🌐' });
     const timer = setTimeout(() => {
-      resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+      done({ country: 'Unknown', countryCode: '', flag: '🌐' });
     }, 3000);
 
-    const req = http.get(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode`, {
-      timeout: 2500,
-      headers: { 'User-Agent': 'curl/7.68.0' }
-    }, (res) => {
-      let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => {
-        clearTimeout(timer);
-        try {
-          const data = JSON.parse(body);
-          if (data && data.status === 'success') {
-            const country = data.country || 'Unknown';
-            const countryCode = (data.countryCode || '').toUpperCase();
-            const flag = countryCodeToFlag(countryCode) || '🌐';
-            return resolve({ country, countryCode, flag });
-          }
-        } catch {}
-        resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+    let req;
+    try {
+      req = https.get(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
+        timeout: 2500,
+        headers: { 'User-Agent': 'PrivateBrowserPro/1.0' }
+      }, (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          clearTimeout(timer);
+          return done({ country: 'Unknown', countryCode: '', flag: '🌐' });
+        }
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          clearTimeout(timer);
+          try {
+            const data = JSON.parse(body);
+            if (data && data.country_name && !data.error) {
+              const country = data.country_name || 'Unknown';
+              const countryCode = (data.country_code || '').toUpperCase();
+              const flag = countryCodeToFlag(countryCode) || '🌐';
+              return done({ country, countryCode, flag });
+            }
+          } catch {}
+          done({ country: 'Unknown', countryCode: '', flag: '🌐' });
+        });
       });
-    });
+    } catch {
+      clearTimeout(timer);
+      return done({ country: 'Unknown', countryCode: '', flag: '🌐' });
+    }
 
     req.on('error', () => {
       clearTimeout(timer);
-      resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+      done({ country: 'Unknown', countryCode: '', flag: '🌐' });
     });
 
     req.on('timeout', () => {
       req.destroy();
       clearTimeout(timer);
-      resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+      done({ country: 'Unknown', countryCode: '', flag: '🌐' });
     });
   });
 }

@@ -9,7 +9,7 @@
   "user_interaction": "NONE",
   "status": "VALID",
   "code_paths": [
-    "main.js:910",
+    "main.js:917",
     "app/src/main/java/com/jozmoz/privatebrowser/data/Profile.kt:42"
   ],
   "cwe": "CWE-319",
@@ -61,10 +61,18 @@
       "details": "Calculated risk score as 4.8 and priority as MEDIUM.",
       "pass_number": 1,
       "timestamp": "2026-09-07T13:24:36Z"
+    },
+    {
+      "stage": "patch",
+      "action": "patched",
+      "details": "Post-fix verification: desktop 6/6 + Android static 8/8 PASS; Android awaits Gradle build for VERIFIED_SECURE.",
+      "pass_number": 1,
+      "snapshot": "",
+      "timestamp": "2026-09-07T13:47:12Z"
     }
   ],
   "reasoning": "Confirmed in main.js:235 and Profile.kt:42. User-provided upstream proxy authentication passwords (profile.proxy.pass / proxyPass) are stored unencrypted in JSON format in data/profiles.json and in the Android Room SQLite database `profiles` table. Any local process or unprivileged user with read permissions can extract credentials in plaintext.",
-  "repro_hints": "Desktop half fixed in live tree (encryptSecret/decryptSecret, safeStorage gate app.isReady+isEncryptionAvailable). Residual: AES-GCM fallback key is machine-derived, so same-user LOCAL reads it back; profiles:list returns decrypted passwords to renderer. Android half UNFIXED: Profile.kt:42 proxyPass plaintext Room column, AppDatabase without SQLCipher, no EncryptedSharedPreferences under app/src (see repro_79d91e01_android_creds.py).",
+  "repro_hints": "Desktop: encryptSecret/decryptSecret with safeStorage gate; enc:v2: fallback now warns once and is documented as obfuscation-only (verify_79d91e01_desktop_fixed.py 6/6 PASS). Android: NEW ProxyCredentialStore.kt (EncryptedSharedPreferences, keystore AES256_GCM) + Profile.kt columns deprecated + AppDatabase v2 migration that copies creds into the encrypted store and wipes the plaintext columns (verify_79d91e01_android_fixed.py 8/8 PASS static). Android not compiled here (no SDK in this environment), so this stays PATCHED pending a Gradle build, not VERIFIED_SECURE.",
   "triage_checklist": {
     "ignore_hypothetical_misuse": {
       "outcome": "PASS"

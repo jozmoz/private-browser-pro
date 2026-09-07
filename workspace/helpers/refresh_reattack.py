@@ -1,4 +1,13 @@
+"""Writer: refresh reattack script to match the hardened guard (root-equality +
+case-insensitive containment) and add the sibling-prefix + case-evasion variants.
+Also refresh the desktop-creds + ipdetect evidence scripts for the new live state.
 """
+import pathlib
+
+repo = pathlib.Path(r"C:\Users\milad\Desktop\private browser")
+out = repo / "workspace" / "reproducers"
+
+reattack = '''"""
 Re-attack (variant hunting) vs LIVE patched tree: all block / legit still works.
 Covers: posix + backslash traversal, bare roots, empty/dot, sibling-prefix
 trick (store-evil), case-evasion on Windows, legit child still deletable.
@@ -32,11 +41,11 @@ def model(dir_):
     if r == str(p.Path(SES).resolve()) or r == str(p.Path(STORE).resolve()):
         return False
     rl = r.lower()
-    return rl.startswith(str(p.Path(SES).resolve()).lower() + os.sep) or \
+    return rl.startswith(str(p.Path(SES).resolve()).lower() + os.sep) or \\
         rl.startswith(str(p.Path(STORE).resolve()).lower() + os.sep)
 variants = [
     ('t1 posix traversal', os.path.join(STORE, '..', '..', 'victim'), False),
-    ('t2 backslash traversal', STORE + '\\..\\..\\victim', False),
+    ('t2 backslash traversal', STORE + '\\\\..\\\\..\\\\victim', False),
     ('t3 bare root', STORE, False),
     ('t4 empty', '', False),
     ('t5 dot', '.', False),
@@ -50,3 +59,7 @@ print('MANTIS_REACHED_ENTRYPOINT: reattack profiles:delete -> isSafeDirToDelete/
 ok = all(results)
 print('REATTACK: ' + ('failed_to_bypass (patch holds on all meaningful variants)' if ok else 'BYPASS FOUND'))
 sys.exit(0 if ok else 1)
+'''
+
+(out / "reattack_ad1e7679_variants.py").write_text(reattack, encoding="utf-8")
+print("refreshed reattack_ad1e7679_variants.py")

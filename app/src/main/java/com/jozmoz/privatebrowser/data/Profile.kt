@@ -33,11 +33,20 @@ data class Profile(
     val webrtcProtection: Boolean = true,
     val dnsProtection: Boolean = true,
 
-    // Proxy fields
+    // Proxy fields (non-secret metadata only; credentials live in
+    // ProxyCredentialStore encrypted with a keystore-backed key)
     val proxyEnabled: Boolean = false,
     val proxyType: String = "http",
     val proxyHost: String = "",
     val proxyPort: Int = 8080,
+    @Deprecated(
+        message = "Moved to ProxyCredentialStore; kept only for one-time migration.",
+        replaceWith = ReplaceWith("ProxyCredentialStore.getUser(context, id)")
+    )
     val proxyUser: String = "",
+    @Deprecated(
+        message = "Moved to ProxyCredentialStore; kept only for one-time migration.",
+        replaceWith = ReplaceWith("ProxyCredentialStore.getPass(context, id)")
+    )
     val proxyPass: String = ""
 )

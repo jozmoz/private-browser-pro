@@ -5,12 +5,12 @@ raw dir.startswith(SESSIONS) without path.resolve) in an isolated temp dir.
 No live-tree writes; only temp dirs under the OS temp area.
 Run: python workspace/reproducers/repro_ad1e7679_path_traversal.py
 """
-import os, shutil, subprocess, tempfile
+import os, shutil, subprocess, tempfile  # noqa
 repo = r'C:/Users/milad/Desktop/private browser'
 tmp = tempfile.mkdtemp(prefix='mantis-base-')
-subprocess.run(['git', '--work-tree=' + tmp, 'checkout', 'HEAD', '--', 'main.js'],
-               cwd=repo, check=True, capture_output=True)
-src = open(os.path.join(tmp, 'main.js'), encoding='utf-8').read().splitlines()
+base = subprocess.run(['git', 'show', '3969557:main.js'], cwd=repo, check=True,
+                       capture_output=True).stdout.decode('utf-8')
+src = base.splitlines()
 i = next(n for n, l in enumerate(src) if 'async function safeRmSessionDirAsync' in l)
 body = '\n'.join(src[i:i+3])
 assert '.startsWith(SESSIONS_DIR)' in body and 'path.resolve' not in body, 'baseline shape changed'
@@ -34,4 +34,4 @@ print('sandbox normpath escapes store:', os.path.commonpath([store]) != os.path.
 shutil.rmtree(target)  # what fs.rmSync recursive would do once the guard passed
 assert not os.path.exists(victim) and os.path.exists(store)
 print('REPRODUCED: traversal payload deletes directory outside profile root on unpatched baseline')
-shutil.rmtree(root, ignore_errors=True); shutil.rmtree(tmp, ignore_errors=True)
+shutil.rmtree(root, ignore_errors=True)
