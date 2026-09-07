@@ -37,3 +37,7 @@ desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Internal workspace & test artifacts
+workspace/
+
