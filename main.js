@@ -59,12 +59,12 @@ function ensureDataDir() {
 }
 
 const UGC_RELEASE_API = 'https://api.github.com/repos/ungoogled-software/ungoogled-chromium-windows/releases/latest';
-const UA_CHROME_VERSION = '130.0.0.0';
-const UA_FULL_VERSION = '130.0.6723.116';
+const UA_CHROME_VERSION = '151.0.0.0';
+const UA_FULL_VERSION = '151.0.7922.173';
 const UA_BRANDS = [
-  { brand: 'Chromium', version: '130' },
+  { brand: 'Chromium', version: '151' },
   { brand: 'Not?A_Brand', version: '24' },
-  { brand: 'Google Chrome', version: '130' }
+  { brand: 'Google Chrome', version: '151' }
 ];
 
 /* ==================== Anti-Detect Presets & Fingerprint Engine ==================== */
@@ -235,7 +235,7 @@ function getTimezoneName(tz, date = new Date()) {
 }
 
 function generateSmartFingerprint(custom = {}) {
-  const osList = ['windows', 'windows', 'windows', 'mac', 'linux'];
+  const osList = ['windows', 'windows10', 'windows', 'mac', 'linux'];
   const os = custom.os || osList[Math.floor(Math.random() * osList.length)];
 
   let platform = 'Win32';
@@ -298,7 +298,7 @@ function cleanFingerprint(raw) {
   const rawTz = String(raw.timezone || def.timezone).replace(/[^a-zA-Z0-9/_+\-]/g, '').slice(0, 50);
   const tzOffset = getTimezoneOffsetFor(rawTz);
   return {
-    os: ['windows', 'mac', 'linux'].includes(raw.os) ? raw.os : def.os,
+    os: ['windows', 'windows10', 'mac', 'linux'].includes(raw.os) ? raw.os : def.os,
     platform: String(raw.platform || def.platform).replace(/[\x00-\x1f\x7f\r\n]/g, '').slice(0, 30),
     userAgent: String(raw.userAgent || def.userAgent).replace(/[\x00-\x1f\x7f\r\n]/g, '').slice(0, 300),
     hardwareConcurrency: (Number(raw.hardwareConcurrency) > 0) ? Math.min(128, Math.max(1, Number(raw.hardwareConcurrency))) : def.hardwareConcurrency,
@@ -335,20 +335,32 @@ function buildStealthScript(fp) {
     else if (fp.language.startsWith('ar')) languages = ['ar-AE', 'ar', 'en-US', 'en'];
   }
 
-  let chromeMajor = '130';
-  let chromeFull = '130.0.6723.117';
+  let chromeMajor = '151';
+  let chromeFull = '151.0.7922.173';
   const uaMatch = (fp.userAgent || '').match(/Chrome\/(\d+)(\.[\d.]+)/);
   if (uaMatch) {
     chromeMajor = uaMatch[1];
     chromeFull = uaMatch[1] + uaMatch[2];
   }
 
+  const isMac = fp.os === 'mac' || fp.platform === 'MacIntel';
+  const isLinux = fp.os === 'linux' || fp.platform === 'Linux x86_64';
+  const isWin10 = fp.os === 'windows10';
+  const osPlatform = isMac ? 'macOS' : (isLinux ? 'Linux' : 'Windows');
+  const osVersion = isMac ? '14.5.0' : (isLinux ? '6.8.0' : (isWin10 ? '10.0.0' : '15.0.0'));
+  const isArm = isMac && (fp.webglVendor && fp.webglVendor.includes('Apple'));
+  const architecture = isArm ? 'arm' : 'x86';
+
   const jsonConfig = JSON.stringify({
     chromeMajor: chromeMajor,
     chromeFull: chromeFull,
     hardwareConcurrency: fp.hardwareConcurrency || 8,
     deviceMemory: fp.deviceMemory || 8,
-    platform: fp.platform || 'Win32',
+    os: fp.os || (isMac ? 'mac' : (isLinux ? 'linux' : (isWin10 ? 'windows10' : 'windows'))),
+    osPlatform: osPlatform,
+    osVersion: osVersion,
+    architecture: architecture,
+    platform: fp.platform || (isMac ? 'MacIntel' : (isLinux ? 'Linux x86_64' : 'Win32')),
     userAgent: fp.userAgent || '',
     languages: languages,
     screenWidth: fp.screenWidth || 1920,
@@ -392,19 +404,18 @@ function buildStealthScript(fp) {
   };
   makeNative(Function.prototype.toString, 'toString', 0);
 
-  // 2. Client Hints (navigator.userAgentData) - Always match target OS platform & UA version
+  // 2. Client Hints (navigator.userAgentData) - Exact match for target OS platform, version, arch & Chrome version
   try {
     if (navigator.userAgentData || window.NavigatorUAData) {
-      const isMac = cfg.platform === 'MacIntel';
-      const isLinux = cfg.platform === 'Linux x86_64';
-      const osPlatform = isMac ? 'macOS' : (isLinux ? 'Linux' : 'Windows');
-      const osVersion = isMac ? '15.0.0' : (isLinux ? '6.8.0' : '15.0.0');
-      const chromeVer = cfg.chromeMajor || '130';
+      const osPlatform = cfg.osPlatform || 'Windows';
+      const osVersion = cfg.osVersion || '15.0.0';
+      const arch = cfg.architecture || 'x86';
+      const chromeVer = cfg.chromeMajor || '151';
       const chromeFullVer = cfg.chromeFull || (chromeVer + '.0.0.0');
       const brands = [
         { brand: 'Chromium', version: chromeVer },
         { brand: 'Google Chrome', version: chromeVer },
-        { brand: 'Not_A Brand', version: '24' }
+        { brand: 'Not?A_Brand', version: '24' }
       ];
 
       const uad = {
@@ -412,17 +423,29 @@ function buildStealthScript(fp) {
         mobile: false,
         platform: osPlatform,
         getHighEntropyValues: makeNative(function getHighEntropyValues(hints) {
-          return Promise.resolve({
-            architecture: 'x86',
+          const requested = Array.isArray(hints) ? hints : [];
+          const fullData = {
+            architecture: arch,
             bitness: '64',
             brands: brands,
-            fullVersionList: brands.map(b => ({ brand: b.brand, version: b.brand === 'Not_A Brand' ? '24.0.0.0' : chromeFullVer })),
+            formFactors: ['Desktop'],
+            fullVersionList: brands.map(b => ({ brand: b.brand, version: b.brand.includes('Not') ? '24.0.0.0' : chromeFullVer })),
             mobile: false,
             model: '',
             platform: osPlatform,
             platformVersion: osVersion,
-            uaFullVersion: chromeFullVer
-          });
+            uaFullVersion: chromeFullVer,
+            wow64: false
+          };
+          const res = { brands, mobile: false, platform: osPlatform };
+          if (requested.length === 0) {
+            Object.assign(res, fullData);
+          } else {
+            for (const h of requested) {
+              if (h in fullData) res[h] = fullData[h];
+            }
+          }
+          return Promise.resolve(res);
         }, 'getHighEntropyValues', 1),
         toJSON: makeNative(function toJSON() {
           return { brands, mobile: false, platform: osPlatform };
@@ -461,56 +484,51 @@ function buildStealthScript(fp) {
     try { delete navigator.doNotTrack; } catch(e) {}
 
     Object.defineProperty(targetNav, 'hardwareConcurrency', {
-      get: makeNative(function hardwareConcurrency() {
-        if (!this || (!(this instanceof (typeof Navigator !== 'undefined' ? Navigator : Object)) && this !== window.navigator)) {
-          throw new TypeError("Failed to read the 'hardwareConcurrency' property from 'Navigator': Illegal invocation");
-        }
-        return cores;
-      }, 'get hardwareConcurrency', 0),
+      get: makeNative(function hardwareConcurrency() { return cores; }, 'get hardwareConcurrency', 0),
       configurable: true,
       enumerable: true
     });
 
     Object.defineProperty(targetNav, 'deviceMemory', {
-      get: makeNative(function deviceMemory() {
-        if (!this || (!(this instanceof (typeof Navigator !== 'undefined' ? Navigator : Object)) && this !== window.navigator)) {
-          throw new TypeError("Failed to read the 'deviceMemory' property from 'Navigator': Illegal invocation");
-        }
-        return mem;
-      }, 'get deviceMemory', 0),
+      get: makeNative(function deviceMemory() { return mem; }, 'get deviceMemory', 0),
       configurable: true,
       enumerable: true
     });
 
     Object.defineProperty(targetNav, 'platform', {
-      get: makeNative(function platform() {
-        if (!this || (!(this instanceof (typeof Navigator !== 'undefined' ? Navigator : Object)) && this !== window.navigator)) {
-          throw new TypeError("Failed to read the 'platform' property from 'Navigator': Illegal invocation");
-        }
-        return targetPlatform;
-      }, 'get platform', 0),
+      get: makeNative(function platform() { return targetPlatform; }, 'get platform', 0),
       configurable: true,
       enumerable: true
     });
 
     if (cfg.userAgent && cfg.userAgent !== navigator.userAgent) {
       Object.defineProperty(targetNav, 'userAgent', {
-        get: makeNative(function userAgent() {
-          if (!this || (!(this instanceof (typeof Navigator !== 'undefined' ? Navigator : Object)) && this !== window.navigator)) {
-            throw new TypeError("Failed to read the 'userAgent' property from 'Navigator': Illegal invocation");
-          }
-          return cfg.userAgent;
-        }, 'get userAgent', 0),
+        get: makeNative(function userAgent() { return cfg.userAgent; }, 'get userAgent', 0),
         configurable: true,
         enumerable: true
       });
       Object.defineProperty(targetNav, 'appVersion', {
-        get: makeNative(function appVersion() {
-          if (!this || (!(this instanceof (typeof Navigator !== 'undefined' ? Navigator : Object)) && this !== window.navigator)) {
-            throw new TypeError("Failed to read the 'appVersion' property from 'Navigator': Illegal invocation");
-          }
-          return cfg.userAgent.replace(/^Mozilla\\//, '');
-        }, 'get appVersion', 0),
+        get: makeNative(function appVersion() { return cfg.userAgent.replace(/^Mozilla\\//, ''); }, 'get appVersion', 0),
+        configurable: true,
+        enumerable: true
+      });
+    }
+
+    if (cfg.osPlatform === 'macOS') {
+      Object.defineProperty(targetNav, 'oscpu', {
+        get: makeNative(function oscpu() { return 'Intel Mac OS X 10.15'; }, 'get oscpu', 0),
+        configurable: true,
+        enumerable: true
+      });
+    } else if (cfg.osPlatform === 'Linux') {
+      Object.defineProperty(targetNav, 'oscpu', {
+        get: makeNative(function oscpu() { return 'Linux x86_64'; }, 'get oscpu', 0),
+        configurable: true,
+        enumerable: true
+      });
+    } else {
+      Object.defineProperty(targetNav, 'oscpu', {
+        get: makeNative(function oscpu() { return 'Windows NT 10.0; Win64; x64'; }, 'get oscpu', 0),
         configurable: true,
         enumerable: true
       });
@@ -518,28 +536,18 @@ function buildStealthScript(fp) {
 
     if (cfg.languages && cfg.languages.length) {
       Object.defineProperty(targetNav, 'languages', {
-        get: makeNative(function languages() {
-          if (!this || (!(this instanceof (typeof Navigator !== 'undefined' ? Navigator : Object)) && this !== window.navigator)) {
-            throw new TypeError("Failed to read the 'languages' property from 'Navigator': Illegal invocation");
-          }
-          return cfg.languages;
-        }, 'get languages', 0),
+        get: makeNative(function languages() { return cfg.languages; }, 'get languages', 0),
         configurable: true,
         enumerable: true
       });
       Object.defineProperty(targetNav, 'language', {
-        get: makeNative(function language() {
-          if (!this || (!(this instanceof (typeof Navigator !== 'undefined' ? Navigator : Object)) && this !== window.navigator)) {
-            throw new TypeError("Failed to read the 'language' property from 'Navigator': Illegal invocation");
-          }
-          return cfg.languages[0];
-        }, 'get language', 0),
+        get: makeNative(function language() { return cfg.languages[0]; }, 'get language', 0),
         configurable: true,
         enumerable: true
       });
     }
 
-    // Do Not Track (Signals privacy without breaking web standards)
+    // Do Not Track
     Object.defineProperty(targetNav, 'doNotTrack', {
       get: makeNative(function doNotTrack() { return '1'; }, 'get doNotTrack', 0),
       configurable: true,
@@ -547,21 +555,12 @@ function buildStealthScript(fp) {
     });
     try { window.doNotTrack = '1'; } catch(e) {}
 
-    // Navigator.webdriver Masking (Crucial for eliminating Test / Automation flags)
-    try {
-      delete Object.getPrototypeOf(navigator).webdriver;
-    } catch(e) {}
-    try {
-      delete navigator.webdriver;
-    } catch(e) {}
+    // Navigator.webdriver Masking (Return false to match native Chrome and pass Cloudflare Turnstile)
+    try { delete Object.getPrototypeOf(navigator).webdriver; } catch(e) {}
+    try { delete navigator.webdriver; } catch(e) {}
     try {
       Object.defineProperty(targetNav, 'webdriver', {
-        get: makeNative(function webdriver() {
-          if (!this || (!(this instanceof (typeof Navigator !== 'undefined' ? Navigator : Object)) && this !== window.navigator)) {
-            throw new TypeError("Failed to read the 'webdriver' property from 'Navigator': Illegal invocation");
-          }
-          return undefined;
-        }, 'get webdriver', 0),
+        get: makeNative(function webdriver() { return false; }, 'get webdriver', 0),
         configurable: true,
         enumerable: true
       });
@@ -613,27 +612,133 @@ function buildStealthScript(fp) {
     }
   } catch(e) {}
 
-  // 4. Timezone Emulation with Strict Receiver Validation
+  // 4. Complete Timezone & Clock Emulation (100% Fidelity)
   try {
     if (cfg.timezone) {
       const targetTz = cfg.timezone;
       const targetOffset = typeof cfg.timezoneOffset === 'number' ? cfg.timezoneOffset : 0;
-      const tzLongName = cfg.timezoneName || 'Türkiye Standard Time';
+      const OrigDate = Date;
+      const OrigDTF = Intl.DateTimeFormat;
+      const origGetTimezoneOffset = OrigDate.prototype.getTimezoneOffset;
+      const origToLocaleString = OrigDate.prototype.toLocaleString;
+      const origToLocaleDateString = OrigDate.prototype.toLocaleDateString;
+      const origToLocaleTimeString = OrigDate.prototype.toLocaleTimeString;
+      const origToTimeString = OrigDate.prototype.toTimeString;
+      const origToString = OrigDate.prototype.toString;
+      const origToDateString = OrigDate.prototype.toDateString;
+      const origResolvedOptions = OrigDTF.prototype.resolvedOptions;
 
-      const origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
+      function getOffsetMsFor(date) {
+        try {
+          const utcStr = origToLocaleString.call(date, 'en-US', { timeZone: 'UTC', hour12: false });
+          const tzStr = origToLocaleString.call(date, 'en-US', { timeZone: targetTz, hour12: false });
+          return new OrigDate(utcStr).getTime() - new OrigDate(tzStr).getTime();
+        } catch(e) {
+          return targetOffset * 60000;
+        }
+      }
+
+      function getShifted(date) {
+        origGetTimezoneOffset.call(date); // Enforces native TypeError if receiver not a Date
+        const offMs = getOffsetMsFor(date);
+        return {
+          shifted: new OrigDate(date.getTime() - offMs),
+          offsetMin: Math.round(offMs / 60000)
+        };
+      }
+
       Date.prototype.getTimezoneOffset = makeNative(function getTimezoneOffset() {
-        origGetTimezoneOffset.call(this); // Throws native TypeError if receiver not a Date!
-        return targetOffset;
+        return getShifted(this).offsetMin;
       }, 'getTimezoneOffset', 0);
 
-      const origResolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions;
+      Date.prototype.getHours = makeNative(function getHours() {
+        return getShifted(this).shifted.getUTCHours();
+      }, 'getHours', 0);
+
+      Date.prototype.getMinutes = makeNative(function getMinutes() {
+        return getShifted(this).shifted.getUTCMinutes();
+      }, 'getMinutes', 0);
+
+      Date.prototype.getSeconds = makeNative(function getSeconds() {
+        return getShifted(this).shifted.getUTCSeconds();
+      }, 'getSeconds', 0);
+
+      Date.prototype.getDate = makeNative(function getDate() {
+        return getShifted(this).shifted.getUTCDate();
+      }, 'getDate', 0);
+
+      Date.prototype.getDay = makeNative(function getDay() {
+        return getShifted(this).shifted.getUTCDay();
+      }, 'getDay', 0);
+
+      Date.prototype.getMonth = makeNative(function getMonth() {
+        return getShifted(this).shifted.getUTCMonth();
+      }, 'getMonth', 0);
+
+      Date.prototype.getFullYear = makeNative(function getFullYear() {
+        return getShifted(this).shifted.getUTCFullYear();
+      }, 'getFullYear', 0);
+
+      Date.prototype.getYear = makeNative(function getYear() {
+        return getShifted(this).shifted.getUTCFullYear() - 1900;
+      }, 'getYear', 0);
+
+      Date.prototype.toLocaleString = makeNative(function toLocaleString(locales, options) {
+        origGetTimezoneOffset.call(this);
+        const opt = Object.assign({}, options);
+        if (!opt.timeZone) opt.timeZone = targetTz;
+        return origToLocaleString.call(this, locales, opt);
+      }, 'toLocaleString', 0);
+
+      Date.prototype.toLocaleDateString = makeNative(function toLocaleDateString(locales, options) {
+        origGetTimezoneOffset.call(this);
+        const opt = Object.assign({}, options);
+        if (!opt.timeZone) opt.timeZone = targetTz;
+        return origToLocaleDateString.call(this, locales, opt);
+      }, 'toLocaleDateString', 0);
+
+      Date.prototype.toLocaleTimeString = makeNative(function toLocaleTimeString(locales, options) {
+        origGetTimezoneOffset.call(this);
+        const opt = Object.assign({}, options);
+        if (!opt.timeZone) opt.timeZone = targetTz;
+        return origToLocaleTimeString.call(this, locales, opt);
+      }, 'toLocaleTimeString', 0);
+
+      Date.prototype.toDateString = makeNative(function toDateString() {
+        const { shifted } = getShifted(this);
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const pad = n => String(n).padStart(2, '0');
+        return days[shifted.getUTCDay()] + ' ' + months[shifted.getUTCMonth()] + ' ' + pad(shifted.getUTCDate()) + ' ' + shifted.getUTCFullYear();
+      }, 'toDateString', 0);
+
+      Date.prototype.toTimeString = makeNative(function toTimeString() {
+        const { shifted, offsetMin } = getShifted(this);
+        const pad = n => String(n).padStart(2, '0');
+        const sign = offsetMin <= 0 ? '+' : '-';
+        const absMin = Math.abs(offsetMin);
+        const offH = pad(Math.floor(absMin / 60));
+        const offM = pad(absMin % 60);
+        let name = targetTz;
+        try {
+          const parts = new OrigDTF('en-US', { timeZone: targetTz, timeZoneName: 'long' }).formatToParts(this);
+          const p = parts.find(x => x.type === 'timeZoneName');
+          if (p) name = p.value;
+        } catch(e) {}
+        const gmt = 'GMT' + sign + offH + offM + ' (' + name + ')';
+        return pad(shifted.getUTCHours()) + ':' + pad(shifted.getUTCMinutes()) + ':' + pad(shifted.getUTCSeconds()) + ' ' + gmt;
+      }, 'toTimeString', 0);
+
+      Date.prototype.toString = makeNative(function toString() {
+        return this.toDateString() + ' ' + this.toTimeString();
+      }, 'toString', 0);
+
       Intl.DateTimeFormat.prototype.resolvedOptions = makeNative(function resolvedOptions() {
-        const opts = origResolvedOptions.call(this); // Throws native TypeError if receiver not valid!
+        const opts = origResolvedOptions.call(this);
         opts.timeZone = targetTz;
         return opts;
       }, 'resolvedOptions', 0);
 
-      const OrigDTF = Intl.DateTimeFormat;
       const CustomDTF = function(...args) {
         const locales = args[0];
         const options = Object.assign({}, args[1]);
@@ -645,40 +750,6 @@ function buildStealthScript(fp) {
       CustomDTF.supportedLocalesOf = OrigDTF.supportedLocalesOf;
       makeNative(CustomDTF, 'DateTimeFormat', 0);
       Intl.DateTimeFormat = CustomDTF;
-
-      const sign = targetOffset <= 0 ? '+' : '-';
-      const absOffset = Math.abs(targetOffset);
-      const offH = String(Math.floor(absOffset / 60)).padStart(2, '0');
-      const offM = String(absOffset % 60).padStart(2, '0');
-      const gmtString = 'GMT' + sign + offH + offM + ' (' + tzLongName + ')';
-
-      const origToTimeString = Date.prototype.toTimeString;
-      Date.prototype.toTimeString = makeNative(function toTimeString() {
-        origToTimeString.call(this); // Throws native TypeError if receiver not a Date!
-        try {
-          const timeParts = new OrigDTF('en-US', {
-            timeZone: targetTz,
-            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-          }).format(this);
-          return timeParts + ' ' + gmtString;
-        } catch(e) {
-          return origToTimeString.call(this);
-        }
-      }, 'toTimeString', 0);
-
-      const origToString = Date.prototype.toString;
-      Date.prototype.toString = makeNative(function toString() {
-        origToString.call(this); // Throws native TypeError if receiver not a Date!
-        try {
-          const dateParts = new OrigDTF('en-US', {
-            timeZone: targetTz,
-            weekday: 'short', month: 'short', day: '2-digit', year: 'numeric'
-          }).format(this).replace(/,/g, '');
-          return dateParts + ' ' + this.toTimeString();
-        } catch(e) {
-          return origToString.call(this);
-        }
-      }, 'toString', 0);
     }
   } catch(e) {}
 
@@ -721,7 +792,7 @@ function buildStealthScript(fp) {
       window.webkitRTCPeerConnection = undefined;
       window.mozRTCPeerConnection = undefined;
     } catch(e) {}
-  } else if (cfg.webrtcPolicy === 'disable_non_proxied_udp' && window.RTCPeerConnection) {
+  } else if (cfg.webrtcPolicy === 'disable_non_proxied_udp' && !cfg.captchaSafe && window.RTCPeerConnection) {
     try {
       const OrigPC = window.RTCPeerConnection;
       const CustomPC = function(...args) {
@@ -732,7 +803,7 @@ function buildStealthScript(fp) {
             const wrapped = function(e) {
               if (e.candidate && e.candidate.candidate) {
                 const cand = e.candidate.candidate;
-                if (/192\\.168\\.|10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|typ srflx|typ host/.test(cand)) {
+                if (/192\\.168\\.|10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|typ host/.test(cand)) {
                   return;
                 }
               }
@@ -751,10 +822,7 @@ function buildStealthScript(fp) {
   }
 
   // 7. Canvas, Audio, WebGL Fingerprint Protection (Captcha-Safe Guarantee)
-  // When captchaSafe is true, we leave canvas, audio, and WebGL 100% native and untampered.
-  // This guarantees Cloudflare Turnstile's cryptographic proof-of-work hashes match and pass without looping!
   if (!cfg.captchaSafe) {
-    // Only apply noise if user explicitly disabled Captcha-Safe mode
     if (cfg.canvasNoise) {
       try {
         const shift = ((cfg.seed % 7) || 3);
@@ -784,7 +852,7 @@ function buildStealthScript(fp) {
     }
   }
 
-  // 8. Clean Chrome Runtime / App / LoadTimes (Match real Chrome identity)
+  // 8. Clean Chrome Runtime / App / LoadTimes
   try {
     if (!window.chrome) window.chrome = {};
     if (!window.chrome.app) {
@@ -800,6 +868,87 @@ function buildStealthScript(fp) {
     }
     if (!window.chrome.csi) window.chrome.csi = makeNative(function csi() { return { startE: Date.now() }; }, 'csi', 0);
     if (!window.chrome.loadTimes) window.chrome.loadTimes = makeNative(function loadTimes() { return { requestTime: Date.now() / 1000 }; }, 'loadTimes', 0);
+  } catch(e) {}
+
+  // 9. IFrame Interception (Prevent detached/about:blank iframe leaks safely without breaking cross-origin widgets)
+  try {
+    function applyStealthToIframe(win) {
+      if (!win) return;
+      try {
+        if (win.__pb_stealth_applied__) return;
+        win.__pb_stealth_applied__ = true;
+      } catch(e) {
+        // Cross-origin iframe (e.g. Cloudflare Turnstile, reCAPTCHA)
+        return;
+      }
+      try {
+        const tNav = (typeof win.Navigator !== 'undefined' && win.Navigator.prototype) ? win.Navigator.prototype : win.navigator;
+        if (tNav) {
+          try { Object.defineProperty(tNav, 'platform', { get: makeNative(function platform() { return cfg.platform; }, 'get platform', 0), configurable: true }); } catch(e) {}
+          try { Object.defineProperty(tNav, 'hardwareConcurrency', { get: makeNative(function hardwareConcurrency() { return Number(cfg.hardwareConcurrency) || 8; }, 'get hardwareConcurrency', 0), configurable: true }); } catch(e) {}
+          try { Object.defineProperty(tNav, 'deviceMemory', { get: makeNative(function deviceMemory() { return Number(cfg.deviceMemory) || 8; }, 'get deviceMemory', 0), configurable: true }); } catch(e) {}
+          if (cfg.userAgent) {
+            try { Object.defineProperty(tNav, 'userAgent', { get: makeNative(function userAgent() { return cfg.userAgent; }, 'get userAgent', 0), configurable: true }); } catch(e) {}
+            try { Object.defineProperty(tNav, 'appVersion', { get: makeNative(function appVersion() { return cfg.userAgent.replace(/^Mozilla\\//, ''); }, 'get appVersion', 0), configurable: true }); } catch(e) {}
+          }
+        }
+      } catch(e) {}
+    }
+
+    const origContentWindowDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
+    if (origContentWindowDesc && origContentWindowDesc.get) {
+      Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+        get: makeNative(function contentWindow() {
+          const win = origContentWindowDesc.get.call(this);
+          try {
+            if (win) applyStealthToIframe(win);
+          } catch(e) {}
+          return win;
+        }, 'get contentWindow', 0),
+        configurable: true,
+        enumerable: true
+      });
+    }
+  } catch(e) {}
+
+  // 10. Web Worker Stealth Protection (Safe against Cloudflare Turnstile, reCAPTCHA, and module workers)
+  try {
+    if (typeof Worker !== 'undefined') {
+      const OrigWorker = window.Worker;
+      const workerStealthHook = '(function() { try { const cfg = ' + JSON.stringify(cfg) + '; if (typeof self !== "undefined" && self.navigator) { try { Object.defineProperty(self.navigator, "platform", { get: () => cfg.platform, configurable: true }); } catch(e) {} try { Object.defineProperty(self.navigator, "hardwareConcurrency", { get: () => cfg.hardwareConcurrency, configurable: true }); } catch(e) {} try { Object.defineProperty(self.navigator, "deviceMemory", { get: () => cfg.deviceMemory, configurable: true }); } catch(e) {} if (cfg.userAgent) { try { Object.defineProperty(self.navigator, "userAgent", { get: () => cfg.userAgent, configurable: true }); } catch(e) {} } if (cfg.languages) { try { Object.defineProperty(self.navigator, "languages", { get: () => cfg.languages, configurable: true }); } catch(e) {} try { Object.defineProperty(self.navigator, "language", { get: () => cfg.languages[0], configurable: true }); } catch(e) {} } } if (cfg.timezone) { const OrigDate = Date; const OrigDTF = Intl.DateTimeFormat; const targetTz = cfg.timezone; const targetOffset = cfg.timezoneOffset || 0; const origToLocale = OrigDate.prototype.toLocaleString; function getOffMs(d) { try { const u = origToLocale.call(d, "en-US", { timeZone: "UTC", hour12: false }); const t = origToLocale.call(d, "en-US", { timeZone: targetTz, hour12: false }); return new OrigDate(u).getTime() - new OrigDate(t).getTime(); } catch(e) { return targetOffset * 60000; } } function getSh(d) { const off = getOffMs(d); return { sh: new OrigDate(d.getTime() - off), min: Math.round(off / 60000) }; } Date.prototype.getTimezoneOffset = function() { return getSh(this).min; }; Date.prototype.getHours = function() { return getSh(this).sh.getUTCHours(); }; Date.prototype.getMinutes = function() { return getSh(this).sh.getUTCMinutes(); }; Date.prototype.getSeconds = function() { return getSh(this).sh.getUTCSeconds(); }; Date.prototype.getDate = function() { return getSh(this).sh.getUTCDate(); }; Date.prototype.getDay = function() { return getSh(this).sh.getUTCDay(); }; Date.prototype.getMonth = function() { return getSh(this).sh.getUTCMonth(); }; Date.prototype.getFullYear = function() { return getSh(this).sh.getUTCFullYear(); }; Date.prototype.getYear = function() { return getSh(this).sh.getUTCFullYear() - 1900; }; Intl.DateTimeFormat.prototype.resolvedOptions = function() { const o = OrigDTF.prototype.resolvedOptions.call(this); o.timeZone = targetTz; return o; }; } } catch(e) {} })();';
+
+      const PatchedWorker = function Worker(scriptURL, options) {
+        if (!new.target) return new PatchedWorker(scriptURL, options);
+        try {
+          const urlStr = (scriptURL instanceof URL) ? scriptURL.href : String(scriptURL);
+          // Never wrap Cloudflare, Turnstile, reCAPTCHA, hCaptcha, or module workers
+          if (
+            (options && options.type === 'module') ||
+            urlStr.indexOf('challenge-platform') !== -1 ||
+            urlStr.indexOf('turnstile') !== -1 ||
+            urlStr.indexOf('recaptcha') !== -1 ||
+            urlStr.indexOf('hcaptcha') !== -1 ||
+            urlStr.indexOf('cloudflare') !== -1 ||
+            urlStr.indexOf('challenges.cloudflare.com') !== -1
+          ) {
+            return new OrigWorker(scriptURL, options);
+          }
+          const code = workerStealthHook + '\\nimportScripts(' + JSON.stringify(urlStr) + ');';
+          const blob = new Blob([code], { type: 'application/javascript' });
+          const blobUrl = URL.createObjectURL(blob);
+          try {
+            return new OrigWorker(blobUrl, options);
+          } catch(e) {
+            return new OrigWorker(scriptURL, options);
+          }
+        } catch(e) {
+          return new OrigWorker(scriptURL, options);
+        }
+      };
+      PatchedWorker.prototype = OrigWorker.prototype;
+      makeNative(PatchedWorker, 'Worker', 1);
+      window.Worker = PatchedWorker;
+    }
   } catch(e) {}
 })();
 `;
@@ -1478,6 +1627,7 @@ async function launchProfile(profile) {
   }
 
   const fp = profile.fingerprint || generateSmartFingerprint();
+  const resolvedTz = (fp.timezone && fp.timezone !== 'system') ? fp.timezone : 'Europe/Istanbul';
 
   // Create isolated stealth extension inside the session folder
   const extDir = path.join(dir, 'stealth-ext');
@@ -1495,6 +1645,34 @@ async function launchProfile(profile) {
     if (appIconSrc) {
       try { fs.copyFileSync(appIconSrc, path.join(extDir, 'icon.ico')); } catch (_) {}
     }
+
+    const isMac = fp.os === 'mac' || fp.platform === 'MacIntel';
+    const isLinux = fp.os === 'linux' || fp.platform === 'Linux x86_64';
+    const isWin10 = fp.os === 'windows10';
+    const osPlatform = isMac ? 'macOS' : (isLinux ? 'Linux' : 'Windows');
+    const osVersion = isMac ? '14.5.0' : (isLinux ? '6.8.0' : (isWin10 ? '10.0.0' : '15.0.0'));
+    const isArm = isMac && (fp.webglVendor && fp.webglVendor.includes('Apple'));
+    const arch = isArm ? 'arm' : 'x86';
+    const osLabel = isMac ? 'macOS Sonoma (14.5)' : (isLinux ? 'Linux (Ubuntu 24.04)' : (isWin10 ? 'Windows 10 (Build 19045)' : 'Windows 11 (Build 22631)'));
+
+    const gridSpecs = `
+      <div class="spec-item">
+        <div class="spec-label">Operating System & Platform</div>
+        <div class="spec-val">${escapeHtml(osLabel)} (${escapeHtml(fp.platform || (isMac ? 'MacIntel' : (isLinux ? 'Linux x86_64' : 'Win32')))})</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-label">CPU Cores & Device Memory</div>
+        <div class="spec-val">${escapeHtml(String(fp.hardwareConcurrency || 8))} Cores / ${escapeHtml(String(fp.deviceMemory || 8))} GB RAM</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-label">WebGL Graphics Card</div>
+        <div class="spec-val">${escapeHtml(fp.webglGpuName || 'NVIDIA GeForce RTX 4070')}</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-label">Timezone & Live Emulated Clock</div>
+        <div class="spec-val" id="specClock">${escapeHtml(resolvedTz)}</div>
+      </div>
+    `;
 
     const newtabHtml = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -1638,33 +1816,63 @@ async function launchProfile(profile) {
 
     <div class="section-title">💻 Emulated Hardware & Fingerprint Specs:</div>
     <div class="grid">
-      <div class="spec-item">
-        <div class="spec-label">Operating System & Platform</div>
-        <div class="spec-val">${escapeHtml(fp.os === 'linux' ? 'Linux' : (fp.os === 'mac' ? 'macOS' : 'Windows'))} (${escapeHtml(fp.platform || 'Win32')})</div>
-      </div>
-      <div class="spec-item">
-        <div class="spec-label">CPU Cores & Device Memory</div>
-        <div class="spec-val">${escapeHtml(String(fp.hardwareConcurrency || 8))} Cores / ${escapeHtml(String(fp.deviceMemory || 8))} GB RAM</div>
-      </div>
-      <div class="spec-item">
-        <div class="spec-label">WebGL Graphics Card</div>
-        <div class="spec-val">${escapeHtml(fp.webglGpuName || 'NVIDIA GeForce RTX 4070')}</div>
-      </div>
-      <div class="spec-item">
-        <div class="spec-label">Timezone & Language</div>
-        <div class="spec-val">${escapeHtml(fp.timezone || 'America/New_York')} (${escapeHtml(fp.language || 'en-US')})</div>
-      </div>
+      ${gridSpecs}
     </div>
   </div>
+  <script>
+    function updateLiveClock() {
+      try {
+        const el = document.getElementById('specClock');
+        if (el) {
+          const d = new Date();
+          el.textContent = d.toLocaleTimeString('en-US') + ' • ' + ${JSON.stringify(resolvedTz)};
+        }
+      } catch(e) {}
+    }
+    updateLiveClock();
+    setInterval(updateLiveClock, 1000);
+  </script>
 </body>
 </html>`;
 
     fs.writeFileSync(path.join(extDir, 'newtab.html'), newtabHtml, 'utf8');
 
+    const rulesContent = JSON.stringify([
+      {
+        id: 1,
+        priority: 1,
+        action: {
+          type: 'modifyHeaders',
+          requestHeaders: [
+            { header: 'sec-ch-ua-platform', operation: 'set', value: `"${osPlatform}"` },
+            { header: 'sec-ch-ua-platform-version', operation: 'set', value: `"${osVersion}"` },
+            { header: 'sec-ch-ua-arch', operation: 'set', value: `"${arch}"` },
+            { header: 'sec-ch-ua-bitness', operation: 'set', value: '"64"' },
+            { header: 'sec-ch-ua-model', operation: 'set', value: '""' }
+          ]
+        },
+        condition: {
+          urlFilter: '*',
+          resourceTypes: ['main_frame', 'sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'other']
+        }
+      }
+    ], null, 2);
+    fs.writeFileSync(path.join(extDir, 'rules.json'), rulesContent, 'utf8');
+
     const manifestContent = JSON.stringify({
       manifest_version: 3,
       name: 'Private Browser Core',
       version: '2.0.0',
+      permissions: ['declarativeNetRequest'],
+      declarative_net_request: {
+        rule_resources: [
+          {
+            id: 'ruleset_1',
+            enabled: true,
+            path: 'rules.json'
+          }
+        ]
+      },
       icons: {
         "16": "icon.ico",
         "48": "icon.ico",
@@ -1783,9 +1991,6 @@ async function launchProfile(profile) {
     args.push(`--lang=${lang}`);
     args.push(`--accept-lang=${lang}`);
   }
-  if (fp.timezone) {
-    args.push(`--timezone=${cleanCliArg(fp.timezone)}`);
-  }
 
   const targetUrl = cleanStartupUrl(profile.startupUrl) || require('url').pathToFileURL(path.join(extDir, 'newtab.html')).href;
   args.push('--', targetUrl);
@@ -1795,7 +2000,8 @@ async function launchProfile(profile) {
     const spawnEnv = Object.assign({}, process.env, {
       GOOGLE_API_KEY: 'no',
       GOOGLE_DEFAULT_CLIENT_ID: 'no',
-      GOOGLE_DEFAULT_CLIENT_SECRET: 'no'
+      GOOGLE_DEFAULT_CLIENT_SECRET: 'no',
+      TZ: resolvedTz
     });
     delete spawnEnv.HTTP_PROXY;
     delete spawnEnv.HTTPS_PROXY;

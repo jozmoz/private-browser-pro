@@ -679,7 +679,7 @@
   }
 
   function randomizeFormFingerprint() {
-    var osList = ['windows', 'windows', 'mac', 'linux'];
+    var osList = ['windows', 'windows10', 'windows', 'mac', 'linux'];
     var os = osList[Math.floor(Math.random() * osList.length)];
     $('fpOs').value = os;
 
@@ -943,6 +943,9 @@
     } else if (os === 'linux') {
       platform = 'Linux x86_64';
       userAgent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
+    } else if (os === 'windows10') {
+      platform = 'Win32';
+      userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
     }
 
     var timezone = $('fpTimezone').value || 'America/New_York';
@@ -1209,7 +1212,7 @@
     var fp = p.fingerprint || {};
     var osChip = card.querySelector('[data-chip="os"]');
     if (osChip) {
-      var osFa = fp.os === 'mac' ? '💻 macOS' : (fp.os === 'linux' ? '💻 Linux' : (currentLang === 'en' ? '💻 Windows 11' : '💻 ویندوز ۱۱'));
+      var osFa = fp.os === 'mac' ? '💻 macOS' : (fp.os === 'linux' ? '💻 Linux' : (fp.os === 'windows10' ? (currentLang === 'en' ? '💻 Windows 10' : '💻 ویندوز ۱۰') : (currentLang === 'en' ? '💻 Windows 11' : '💻 ویندوز ۱۱')));
       osChip.textContent = osFa;
     }
 
@@ -2302,6 +2305,22 @@
 
     var btnAutoIp = $('btnAutoDetectIp');
     if (btnAutoIp) btnAutoIp.addEventListener('click', handleAutoDetectIp);
+
+    var fpOsSelect = $('fpOs');
+    if (fpOsSelect) {
+      fpOsSelect.addEventListener('change', function () {
+        var selectedOs = fpOsSelect.value;
+        var gpuEl = $('fpGpu');
+        if (!gpuEl) return;
+        var curGpu = gpuEl.value || '';
+        var isMacGpu = curGpu.indexOf('apple-') === 0;
+        if (selectedOs === 'mac' && !isMacGpu) {
+          gpuEl.value = 'apple-m3';
+        } else if (selectedOs !== 'mac' && isMacGpu) {
+          gpuEl.value = 'nvidia-rtx4070';
+        }
+      });
+    }
 
     var proxyCheck = $('proxyEnabled');
     var proxyWrap = $('proxyFieldsWrap');

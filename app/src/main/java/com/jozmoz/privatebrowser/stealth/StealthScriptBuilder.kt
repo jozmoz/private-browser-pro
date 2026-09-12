@@ -207,6 +207,111 @@ object StealthScriptBuilder {
                         }
                     } catch(e) {}
                 }
+
+                // 9. Timezone & Date Spoofing
+                if (cfg.timezone && cfg.timezone !== 'system') {
+                    try {
+                        const targetTz = cfg.timezone;
+                        const origDateTimeFormat = Intl.DateTimeFormat;
+                        function FakeDateTimeFormat(locales, options) {
+                            const opt = Object.assign({}, options);
+                            if (!opt.timeZone) opt.timeZone = targetTz;
+                            return new origDateTimeFormat(locales, opt);
+                        }
+                        FakeDateTimeFormat.prototype = origDateTimeFormat.prototype;
+                        FakeDateTimeFormat.supportedLocalesOf = origDateTimeFormat.supportedLocalesOf;
+                        Intl.DateTimeFormat = makeNative(FakeDateTimeFormat, 'DateTimeFormat');
+
+                        const origResolvedOptions = origDateTimeFormat.prototype.resolvedOptions;
+                        origDateTimeFormat.prototype.resolvedOptions = makeNative(function resolvedOptions() {
+                            const res = origResolvedOptions.apply(this, arguments);
+                            res.timeZone = targetTz;
+                            return res;
+                        }, 'resolvedOptions');
+
+                        const origGetTimezoneOffset = Date.prototype.getTimezoneOffset;
+                        const origGetHours = Date.prototype.getHours;
+                        const origGetMinutes = Date.prototype.getMinutes;
+                        const origGetSeconds = Date.prototype.getSeconds;
+                        const origGetDate = Date.prototype.getDate;
+                        const origGetDay = Date.prototype.getDay;
+                        const origGetMonth = Date.prototype.getMonth;
+                        const origGetFullYear = Date.prototype.getFullYear;
+                        const origGetYear = Date.prototype.getYear;
+                        const origToLocaleString = Date.prototype.toLocaleString;
+                        const origToLocaleDateString = Date.prototype.toLocaleDateString;
+                        const origToLocaleTimeString = Date.prototype.toLocaleTimeString;
+                        const origToDateString = Date.prototype.toDateString;
+                        const origToTimeString = Date.prototype.toTimeString;
+                        const origToString = Date.prototype.toString;
+
+                        function getTargetOffset(d) {
+                            try {
+                                const iso = new origDateTimeFormat('en-US', {
+                                    timeZone: targetTz,
+                                    year: 'numeric', month: '2-digit', day: '2-digit',
+                                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                                    hour12: false
+                                }).format(d);
+                                const parts = iso.split(/[\/, :]+/);
+                                if (parts.length >= 6) {
+                                    const asUtc = Date.UTC(parseInt(parts[2], 10), parseInt(parts[0], 10) - 1, parseInt(parts[1], 10), parseInt(parts[3], 10) % 24, parseInt(parts[4], 10), parseInt(parts[5], 10));
+                                    return (d.getTime() - asUtc) / 60000;
+                                }
+                            } catch (e) {}
+                            return origGetTimezoneOffset.call(d);
+                        }
+
+                        function getShiftedDate(d) {
+                            const localOff = origGetTimezoneOffset.call(d);
+                            const targetOff = getTargetOffset(d);
+                            return new Date(d.getTime() + (localOff - targetOff) * 60000);
+                        }
+
+                        Date.prototype.getTimezoneOffset = makeNative(function getTimezoneOffset() {
+                            return getTargetOffset(this);
+                        }, 'getTimezoneOffset');
+
+                        Date.prototype.getHours = makeNative(function getHours() { return origGetHours.call(getShiftedDate(this)); }, 'getHours');
+                        Date.prototype.getMinutes = makeNative(function getMinutes() { return origGetMinutes.call(getShiftedDate(this)); }, 'getMinutes');
+                        Date.prototype.getSeconds = makeNative(function getSeconds() { return origGetSeconds.call(getShiftedDate(this)); }, 'getSeconds');
+                        Date.prototype.getDate = makeNative(function getDate() { return origGetDate.call(getShiftedDate(this)); }, 'getDate');
+                        Date.prototype.getDay = makeNative(function getDay() { return origGetDay.call(getShiftedDate(this)); }, 'getDay');
+                        Date.prototype.getMonth = makeNative(function getMonth() { return origGetMonth.call(getShiftedDate(this)); }, 'getMonth');
+                        Date.prototype.getFullYear = makeNative(function getFullYear() { return origGetFullYear.call(getShiftedDate(this)); }, 'getFullYear');
+                        Date.prototype.getYear = makeNative(function getYear() { return origGetYear.call(getShiftedDate(this)); }, 'getYear');
+
+                        Date.prototype.toLocaleString = makeNative(function toLocaleString(locales, options) {
+                            const opt = Object.assign({}, options);
+                            if (!opt.timeZone) opt.timeZone = targetTz;
+                            return origToLocaleString.call(this, locales, opt);
+                        }, 'toLocaleString');
+
+                        Date.prototype.toLocaleDateString = makeNative(function toLocaleDateString(locales, options) {
+                            const opt = Object.assign({}, options);
+                            if (!opt.timeZone) opt.timeZone = targetTz;
+                            return origToLocaleDateString.call(this, locales, opt);
+                        }, 'toLocaleDateString');
+
+                        Date.prototype.toLocaleTimeString = makeNative(function toLocaleTimeString(locales, options) {
+                            const opt = Object.assign({}, options);
+                            if (!opt.timeZone) opt.timeZone = targetTz;
+                            return origToLocaleTimeString.call(this, locales, opt);
+                        }, 'toLocaleTimeString');
+
+                        Date.prototype.toDateString = makeNative(function toDateString() {
+                            return origToDateString.call(getShiftedDate(this));
+                        }, 'toDateString');
+
+                        Date.prototype.toTimeString = makeNative(function toTimeString() {
+                            return origToTimeString.call(getShiftedDate(this));
+                        }, 'toTimeString');
+
+                        Date.prototype.toString = makeNative(function toString() {
+                            return origToString.call(getShiftedDate(this));
+                        }, 'toString');
+                    } catch(e) {}
+                }
             })();
         """.trimIndent()
     }

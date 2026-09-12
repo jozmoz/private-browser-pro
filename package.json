@@ -1,6 +1,6 @@
 {
   "name": "private-browser-pro",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Professional Anti-Detect Browser Manager with isolated fingerprint spoofing, zero-data ephemeral sessions, and proxy tunneling.",
   "main": "main.js",
   "scripts": {
