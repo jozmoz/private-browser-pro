@@ -204,6 +204,7 @@
       secFingerprint: '2. Digital Identity & Anti-Detect Fingerprint',
       btnAutoDetectIp: '⚡ Auto-Detect with IP',
       btnSmartRandomize: '🎲 Smart Randomize',
+      btnGoogleSafePersona: '✨ Google & Gmail Safe',
       lblOs: 'Operating System',
       lblResolution: 'Monitor Resolution',
       lblTimezone: 'Timezone (Sync with IP / Proxy)',
@@ -348,6 +349,7 @@
       secFingerprint: '۲. هویت دیجیتال و اثر انگشت (Anti-Detect Fingerprint)',
       btnAutoDetectIp: '⚡ تنظیم خودکار با آی‌پی',
       btnSmartRandomize: '🎲 تولید هویت هوشمند',
+      btnGoogleSafePersona: '✨ پرسونای امن گوگل/جیمیل',
       lblOs: 'سیستم‌عامل فرضی',
       lblResolution: 'وضوح مانیتور (Resolution)',
       lblTimezone: 'منطقه زمانی (Timezone - مطابق با آی‌پی/پروکسی)',
@@ -632,6 +634,118 @@
     if (!matched && radios.length) radios[0].checked = true;
   }
 
+  // ======= Google/Gmail Safe Persona Generator =======
+  function generateGoogleSafePersona() {
+    // OS: Windows 11 or 10 (native host match to avoid font/DirectWrite leaks)
+    var osList = ['windows', 'windows10'];
+    var os = osList[Math.floor(Math.random() * osList.length)];
+    $('fpOs').value = os;
+
+    // High-trust NVIDIA Direct3D11 GPUs (most common on real Windows desktops)
+    var safeGpus = ['nvidia-rtx4070', 'nvidia-rtx3060', 'nvidia-rtx4060ti', 'nvidia-rtx3070'];
+    $('fpGpu').value = safeGpus[Math.floor(Math.random() * safeGpus.length)];
+
+    // Standard desktop specs
+    $('fpResolution').value = '1920x1080';
+    $('fpCores').value = '8';
+    $('fpMemory').value = '16';
+
+    // Captcha Safe ON, all noise OFF (zero Lying-Canvas risk)
+    if ($('fpCaptchaSafe')) $('fpCaptchaSafe').checked = true;
+    $('fpCanvasNoise').checked = false;
+    $('fpAudioNoise').checked = false;
+    $('fpWebglNoise').checked = false;
+    $('fpWebrtcProtection').checked = true;
+    if ($('fpDnsProtection')) $('fpDnsProtection').checked = true;
+
+    // Sync timezone/language with proxy if proxy has geo data
+    var proxyEnabled = $('proxyEnabled');
+    if (proxyEnabled && proxyEnabled.checked) {
+      var proxyHost = ($('proxyHost') || {}).value;
+      if (proxyHost) {
+        // Auto-detect from proxy IP after persona set
+        handleAutoDetectIp();
+        toast('✨ پرسونای امن گوگل/جیمیل تنظیم شد — تایم‌زون از پروکسی هماهنگ می‌شود...', 'success');
+        updateHarmonyStatus();
+        return;
+      }
+    }
+
+    // Default to US East timezone
+    $('fpTimezone').value = 'America/New_York';
+    $('fpLanguage').value = 'en-US';
+
+    toast('✨ پرسونای امن گوگل/جیمیل تنظیم شد — Canvas Noise خاموش، GPU سازگار.', 'success');
+    updateHarmonyStatus();
+  }
+
+  // ======= Live Harmony Status Checker =======
+  function updateHarmonyStatus() {
+    var box = $('fpHarmonyBox');
+    if (!box) return;
+
+    var iconEl = $('fpHarmonyIcon');
+    var titleEl = $('fpHarmonyTitle');
+    var descEl = $('fpHarmonyDesc');
+    var badgeEl = $('fpHarmonyBadge');
+
+    var warnings = [];
+    var os = ($('fpOs') || {}).value || 'windows';
+    var gpu = ($('fpGpu') || {}).value || '';
+
+    // Check 1: OS vs GPU vendor consistency
+    var isMacOs = os === 'mac';
+    var isAppleGpu = gpu.indexOf('apple-') === 0;
+    if (isMacOs && !isAppleGpu) {
+      warnings.push('سیستم عامل macOS با کارت گرافیک غیر Apple سازگار نیست — فونت‌ها و DirectWrite لو می‌رود.');
+    }
+    if (!isMacOs && isAppleGpu) {
+      warnings.push('کارت گرافیک Apple Silicon فقط روی macOS طبیعی است — روی ویندوز/لینوکس فوراً شناسایی می‌شود.');
+    }
+
+    // Check 2: macOS on Windows host = font leak
+    if (isMacOs) {
+      warnings.push('اجرای macOS روی هاست ویندوز: فونت‌های Segoe UI و Calibri به جای San Francisco لو می‌روند (Silent Flag).');
+    }
+
+    // Check 3: Canvas Noise + CaptchaSafe conflict
+    var captchaSafe = $('fpCaptchaSafe') ? $('fpCaptchaSafe').checked : true;
+    var canvasNoise = $('fpCanvasNoise') ? $('fpCanvasNoise').checked : false;
+    if (!captchaSafe && canvasNoise) {
+      warnings.push('Canvas Noise بدون CaptchaSafe ممکن است توسط Cloudflare Turnstile شناسایی شود.');
+    }
+
+    // Check 4: Timezone vs proxy hint (if proxy has been tested with timezone)
+    // This is a soft check based on the form state
+    var fpTimezone = ($('fpTimezone') || {}).value || '';
+    var fpLanguage = ($('fpLanguage') || {}).value || '';
+
+    // Check language vs timezone basic consistency
+    if (fpTimezone.indexOf('Europe/Istanbul') !== -1 && fpLanguage !== 'tr-TR') {
+      warnings.push('تایم‌زون ترکیه (استانبول) با زبان ' + fpLanguage + ' هماهنگ نیست — پیشنهاد: tr-TR');
+    }
+    if (fpTimezone.indexOf('Asia/Tehran') !== -1 && fpLanguage !== 'fa-IR') {
+      warnings.push('تایم‌زون ایران (تهران) با زبان ' + fpLanguage + ' هماهنگ نیست — پیشنهاد: fa-IR');
+    }
+    if (fpTimezone.indexOf('Europe/Berlin') !== -1 && fpLanguage !== 'de-DE' && fpLanguage !== 'en-US') {
+      warnings.push('تایم‌زون آلمان (برلین) با زبان ' + fpLanguage + ' ممکن است ناسازگار باشد.');
+    }
+
+    if (warnings.length === 0) {
+      box.className = 'harmony-status-box harmony-ok';
+      if (iconEl) iconEl.textContent = '🛡️';
+      if (titleEl) titleEl.textContent = 'هماهنگی مشخصات: کامل و طبیعی ✓';
+      if (descEl) descEl.textContent = 'سیستم عامل، کارت گرافیک، تایم‌زون و موتور صوتی بدون هیچ تناقضی تنظیم شده‌اند.';
+      if (badgeEl) badgeEl.textContent = 'ایده‌آل برای گوگل و کلودفلر';
+    } else {
+      box.className = 'harmony-status-box harmony-warn';
+      if (iconEl) iconEl.textContent = '⚠️';
+      if (titleEl) titleEl.textContent = 'هشدار: ' + warnings.length + ' ناسازگاری شناسایی شد';
+      if (descEl) descEl.innerHTML = warnings.map(function (w) { return '• ' + escapeHtml(w); }).join('<br>');
+      if (badgeEl) badgeEl.textContent = 'نیاز به اصلاح';
+    }
+  }
+
   function handleAutoDetectIp() {
     var a = api();
     if (!a || !a.detectIpInfo) return;
@@ -846,6 +960,7 @@
     populateProfileProxyPicker(matchedPrx ? matchedPrx.id : '');
 
     showOverlay(overlay);
+    updateHarmonyStatus();
     setTimeout(function () {
       try {
         if (nameInput) { nameInput.focus(); nameInput.select(); }
@@ -2301,10 +2416,16 @@
     }
 
     var btnRandom = $('btnSmartRandomize');
-    if (btnRandom) btnRandom.addEventListener('click', randomizeFormFingerprint);
+    if (btnRandom) btnRandom.addEventListener('click', function () {
+      randomizeFormFingerprint();
+      updateHarmonyStatus();
+    });
 
     var btnAutoIp = $('btnAutoDetectIp');
     if (btnAutoIp) btnAutoIp.addEventListener('click', handleAutoDetectIp);
+
+    var btnGoogleSafe = $('btnGoogleSafePersona');
+    if (btnGoogleSafe) btnGoogleSafe.addEventListener('click', generateGoogleSafePersona);
 
     var fpOsSelect = $('fpOs');
     if (fpOsSelect) {
@@ -2319,8 +2440,22 @@
         } else if (selectedOs !== 'mac' && isMacGpu) {
           gpuEl.value = 'nvidia-rtx4070';
         }
+        updateHarmonyStatus();
       });
     }
+
+    // Bind harmony status updates on all fingerprint field changes
+    var harmonyFields = ['fpGpu', 'fpTimezone', 'fpLanguage', 'fpCores', 'fpMemory', 'fpResolution'];
+    harmonyFields.forEach(function (id) {
+      var el = $(id);
+      if (el) el.addEventListener('change', updateHarmonyStatus);
+    });
+    var harmonyChecks = ['fpCaptchaSafe', 'fpCanvasNoise', 'fpAudioNoise', 'fpWebglNoise', 'fpWebrtcProtection', 'fpDnsProtection'];
+    harmonyChecks.forEach(function (id) {
+      var el = $(id);
+      if (el) el.addEventListener('change', updateHarmonyStatus);
+    });
+
 
     var proxyCheck = $('proxyEnabled');
     var proxyWrap = $('proxyFieldsWrap');
@@ -2465,7 +2600,40 @@
           $('proxyPort').value = String(selected.port);
           $('proxyUser').value = selected.username || '';
           $('proxyPass').value = selected.password || '';
+
+          // Auto-fill timezone from proxy geo data if available
+          if (selected.timezone) {
+            var tzSelect = $('fpTimezone');
+            if (tzSelect) {
+              var exists = false;
+              for (var i = 0; i < tzSelect.options.length; i++) {
+                if (tzSelect.options[i].value === selected.timezone) {
+                  exists = true;
+                  break;
+                }
+              }
+              if (!exists) {
+                var opt = document.createElement('option');
+                opt.value = selected.timezone;
+                opt.textContent = selected.timezone + ' (' + (selected.city || selected.country || '') + ')';
+                tzSelect.appendChild(opt);
+              }
+              tzSelect.value = selected.timezone;
+            }
+            // Auto-match language based on country
+            var langSelect = $('fpLanguage');
+            if (langSelect && selected.countryCode) {
+              if (selected.countryCode === 'TR') langSelect.value = 'tr-TR';
+              else if (selected.countryCode === 'IR') langSelect.value = 'fa-IR';
+              else if (selected.countryCode === 'DE') langSelect.value = 'de-DE';
+              else if (selected.countryCode === 'FR') langSelect.value = 'fr-FR';
+              else if (selected.countryCode === 'RU') langSelect.value = 'ru-RU';
+              else langSelect.value = 'en-US';
+            }
+          }
+
           toast(t('proxyAutoFilled'), 'success');
+          updateHarmonyStatus();
         }
       });
     }

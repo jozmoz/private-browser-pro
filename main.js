@@ -20,7 +20,7 @@ function resolveDataDir() {
       if (app && typeof app.getPath === 'function') {
         return app.getPath('userData');
       }
-    } catch (_) {}
+    } catch (_) { }
     return path.join(os.homedir(), 'AppData', 'Roaming', 'Private Browser Pro');
   }
   return path.join(__dirname, 'data');
@@ -950,6 +950,69 @@ function buildStealthScript(fp) {
       window.Worker = PatchedWorker;
     }
   } catch(e) {}
+
+  // 11. SpeechSynthesis Voices Harmonization (Prevent OS & Speech Engine Leaks)
+  try {
+    if (typeof window.speechSynthesis !== 'undefined') {
+      const isMac = cfg.platform && cfg.platform.includes('Mac');
+      const isLinux = cfg.platform && cfg.platform.includes('Linux');
+
+      function createVoiceItem(name, lang, isDef) {
+        const v = {
+          default: !!isDef,
+          lang: lang,
+          localService: true,
+          name: name,
+          voiceURI: name
+        };
+        if (typeof SpeechSynthesisVoice !== 'undefined' && SpeechSynthesisVoice.prototype) {
+          Object.setPrototypeOf(v, SpeechSynthesisVoice.prototype);
+        }
+        return v;
+      }
+
+      let syntheticVoices = [];
+      if (isMac) {
+        syntheticVoices = [
+          createVoiceItem('Alex', 'en-US', true),
+          createVoiceItem('Samantha', 'en-US', false),
+          createVoiceItem('Victoria', 'en-US', false),
+          createVoiceItem('Fred', 'en-US', false)
+        ];
+      } else if (isLinux) {
+        syntheticVoices = [
+          createVoiceItem('English (America)', 'en-US', true),
+          createVoiceItem('default', 'en-US', false)
+        ];
+      } else {
+        // Windows standard voices matching real Chrome on Windows
+        syntheticVoices = [
+          createVoiceItem('Microsoft David - English (United States)', 'en-US', true),
+          createVoiceItem('Microsoft Mark - English (United States)', 'en-US', false),
+          createVoiceItem('Microsoft Zira - English (United States)', 'en-US', false),
+          createVoiceItem('Google US English', 'en-US', false)
+        ];
+      }
+
+      window.speechSynthesis.getVoices = makeNative(function getVoices() {
+        return syntheticVoices.slice();
+      }, 'getVoices', 0);
+    }
+  } catch(e) {}
+
+  // 12. AudioContext SampleRate Harmonization (Standard 48000Hz Desktop Stack)
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass && AudioContextClass.prototype) {
+      try {
+        Object.defineProperty(AudioContextClass.prototype, 'sampleRate', {
+          get: makeNative(function sampleRate() { return 48000; }, 'get sampleRate', 0),
+          configurable: true,
+          enumerable: true
+        });
+      } catch(e) {}
+    }
+  } catch(e) {}
 })();
 `;
 }
@@ -977,14 +1040,14 @@ function encryptSecret(plain) {
     if (app && app.isReady() && safeStorage && safeStorage.isEncryptionAvailable()) {
       return ENC_PREFIX + safeStorage.encryptString(plain).toString('base64');
     }
-  } catch {}
+  } catch { }
 
   // Defense-in-depth fallback only: the derived key is recomputable by any
   // same-user process, so enc:v2: is obfuscation against offline casual
   // readers, NOT a security boundary against local malware.
   if (!_fallbackKeyWarningLogged) {
     _fallbackKeyWarningLogged = true;
-    try { console.warn('[security] safeStorage unavailable; proxy secrets use enc:v2: fallback (same-user readable)'); } catch {}
+    try { console.warn('[security] safeStorage unavailable; proxy secrets use enc:v2: fallback (same-user readable)'); } catch { }
   }
   try {
     const key = getFallbackEncryptionKey();
@@ -994,7 +1057,7 @@ function encryptSecret(plain) {
     enc += cipher.final('base64');
     const tag = cipher.getAuthTag().toString('base64');
     return `${ENC_V2_PREFIX}${iv.toString('base64')}:${tag}:${enc}`;
-  } catch {}
+  } catch { }
 
   return plain;
 }
@@ -1008,7 +1071,7 @@ function decryptSecret(cipherOrPlain) {
           const buf = Buffer.from(cipherOrPlain.slice(ENC_PREFIX.length), 'base64');
           return safeStorage.decryptString(buf);
         }
-      } catch {}
+      } catch { }
     } else if (cipherOrPlain.startsWith(ENC_V2_PREFIX)) {
       try {
         const parts = cipherOrPlain.slice(ENC_V2_PREFIX.length).split(':');
@@ -1023,7 +1086,7 @@ function decryptSecret(cipherOrPlain) {
           dec += decipher.final('utf8');
           return dec;
         }
-      } catch {}
+      } catch { }
     }
   }
   return cipherOrPlain;
@@ -1057,7 +1120,7 @@ function loadProfiles() {
         if (fs.existsSync(PROFILES_FILE)) {
           fs.copyFileSync(PROFILES_FILE, path.join(DATA_DIR, `profiles.corrupt-${Date.now()}.json`));
         }
-      } catch {}
+      } catch { }
     }
     return [];
   }
@@ -1103,7 +1166,7 @@ function loadProxies() {
         if (fs.existsSync(PROXIES_FILE)) {
           fs.copyFileSync(PROXIES_FILE, path.join(DATA_DIR, `proxies.corrupt-${Date.now()}.json`));
         }
-      } catch {}
+      } catch { }
     }
     return [];
   }
@@ -1220,7 +1283,7 @@ function findChromiumBinary() {
   for (const c of candidates) {
     try {
       if (c && fs.existsSync(c)) return c;
-    } catch {}
+    } catch { }
   }
   return null;
 }
@@ -1240,7 +1303,7 @@ function broadcastRunning() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
       mainWindow.webContents.send('browser:status', runningSnapshot());
-    } catch {}
+    } catch { }
   }
 }
 
@@ -1319,7 +1382,7 @@ function safeRmSessionDir(dir) {
     if (isSafeDirToDelete(dir) && fs.existsSync(dir)) {
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
     }
-  } catch {}
+  } catch { }
 }
 
 async function safeRmSessionDirAsync(dir, retries = 5, delay = 500) {
@@ -1330,7 +1393,7 @@ async function safeRmSessionDirAsync(dir, retries = 5, delay = 500) {
         fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 300 });
       }
       if (!fs.existsSync(dir)) return;
-    } catch {}
+    } catch { }
     await new Promise((r) => setTimeout(r, delay * (attempt + 1)));
   }
 }
@@ -1374,7 +1437,7 @@ function createProxyBridge(upstream) {
         server,
         port,
         close: () => {
-          try { server.close(); } catch {}
+          try { server.close(); } catch { }
         }
       });
     });
@@ -1537,8 +1600,8 @@ function handleBridgeHttpConnect(req, clientSocket, head, upstream) {
 
   upstreamSocket.setTimeout(15000);
   upstreamSocket.on('timeout', () => {
-    try { upstreamSocket.destroy(); } catch (_) {}
-    try { clientSocket.destroy(); } catch (_) {}
+    try { upstreamSocket.destroy(); } catch (_) { }
+    try { clientSocket.destroy(); } catch (_) { }
   });
 
   upstreamSocket.once('data', (chunk) => {
@@ -1580,11 +1643,11 @@ function handleBridgeHttpDirect(req, res, upstream) {
   });
 
   proxyReq.on('timeout', () => {
-    try { proxyReq.destroy(); } catch (_) {}
+    try { proxyReq.destroy(); } catch (_) { }
     try {
       res.writeHead(504, { 'Content-Type': 'text/plain' });
       res.end('Gateway Timeout');
-    } catch (_) {}
+    } catch (_) { }
   });
 
   proxyReq.on('error', () => {
@@ -1600,7 +1663,7 @@ function cleanupLaunch(token) {
   if (!rec) return;
   running.delete(token);
   if (rec.bridge && typeof rec.bridge.close === 'function') {
-    try { rec.bridge.close(); } catch {}
+    try { rec.bridge.close(); } catch { }
   }
   broadcastRunning();
   if (rec.isEphemeral) {
@@ -1643,7 +1706,7 @@ async function launchProfile(profile) {
     ];
     const appIconSrc = appIconCandidates.find(p => fs.existsSync(p));
     if (appIconSrc) {
-      try { fs.copyFileSync(appIconSrc, path.join(extDir, 'icon.ico')); } catch (_) {}
+      try { fs.copyFileSync(appIconSrc, path.join(extDir, 'icon.ico')); } catch (_) { }
     }
 
     const isMac = fp.os === 'mac' || fp.platform === 'MacIntel';
@@ -1909,7 +1972,7 @@ async function launchProfile(profile) {
     const prefPath = path.join(defaultDir, 'Preferences');
     let existingPref = {};
     if (isPersistent && fs.existsSync(prefPath)) {
-      try { existingPref = JSON.parse(fs.readFileSync(prefPath, 'utf8')); } catch {}
+      try { existingPref = JSON.parse(fs.readFileSync(prefPath, 'utf8')); } catch { }
     }
 
     const mergedPref = Object.assign({}, existingPref, {
@@ -1941,7 +2004,7 @@ async function launchProfile(profile) {
     const localStatePath = path.join(dir, 'Local State');
     let existingLocalState = {};
     if (isPersistent && fs.existsSync(localStatePath)) {
-      try { existingLocalState = JSON.parse(fs.readFileSync(localStatePath, 'utf8')); } catch {}
+      try { existingLocalState = JSON.parse(fs.readFileSync(localStatePath, 'utf8')); } catch { }
     }
     const hasProxy = !!(profile.proxy && profile.proxy.enabled && profile.proxy.host && profile.proxy.port);
     const mergedLocalState = Object.assign({}, existingLocalState, {
@@ -1950,7 +2013,7 @@ async function launchProfile(profile) {
       dns_over_https: hasProxy ? { mode: 'off' } : { mode: 'automatic' }
     });
     fs.writeFileSync(localStatePath, JSON.stringify(mergedLocalState), 'utf8');
-  } catch {}
+  } catch { }
 
   const hasProxy = !!(profile.proxy && profile.proxy.enabled && profile.proxy.host && profile.proxy.port);
   let bridge = null;
@@ -2012,7 +2075,7 @@ async function launchProfile(profile) {
     child = spawn(bin, args, { stdio: 'ignore', env: spawnEnv });
   } catch (err) {
     if (bridge && typeof bridge.close === 'function') {
-      try { bridge.close(); } catch {}
+      try { bridge.close(); } catch { }
     }
     if (!isPersistent) safeRmSessionDirAsync(dir);
     return { ok: false, error: String((err && err.message) || err) };
@@ -2031,12 +2094,12 @@ function killTree(child) {
   try {
     if (process.platform === 'win32' && typeof child.pid === 'number' && Number.isInteger(child.pid) && child.pid > 0) {
       try {
-        execFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { timeout: 8000 }, () => {});
+        execFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { timeout: 8000 }, () => { });
         return;
-      } catch {}
+      } catch { }
     }
     child.kill();
-  } catch {}
+  } catch { }
 }
 
 function stopProfile(profileId) {
@@ -2058,9 +2121,9 @@ function stopAllSync() {
       if (process.platform === 'win32' && rec.child && rec.child.pid) {
         require('child_process').spawnSync('taskkill.exe', ['/PID', String(rec.child.pid), '/T', '/F'], { timeout: 8000, windowsHide: true });
       } else if (rec.child) {
-        try { rec.child.kill('SIGKILL'); } catch { try { rec.child.kill(); } catch {} }
+        try { rec.child.kill('SIGKILL'); } catch { try { rec.child.kill(); } catch { } }
       }
-    } catch {}
+    } catch { }
   }
 }
 
@@ -2078,7 +2141,7 @@ function cleanStaleSessions() {
         safeRmSessionDir(full);
       }
     }
-  } catch {}
+  } catch { }
 }
 
 function wipeProfile(profileId) {
@@ -2106,7 +2169,7 @@ function wipeProfile(profileId) {
         }
       }
     }
-  } catch {}
+  } catch { }
   broadcastRunning();
   return true;
 }
@@ -2127,7 +2190,7 @@ function wipeAllSessions() {
         safeRmSessionDirAsync(path.join(PROFILES_STORAGE_DIR, name));
       }
     }
-  } catch {}
+  } catch { }
   const profiles = loadProfiles();
   profiles.forEach((p) => { p.lastLaunched = null; });
   saveProfiles(profiles);
@@ -2179,7 +2242,7 @@ function fetchText(url, redirects = 0) {
 function downloadFile(url, dest, progressCb, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 8) return reject(new Error('تغییر مسیر بیش از حد'));
-    try { if (fs.existsSync(dest) && redirects === 0) fs.rmSync(dest, { force: true }); } catch {}
+    try { if (fs.existsSync(dest) && redirects === 0) fs.rmSync(dest, { force: true }); } catch { }
     const parsed = new URL(url);
     if (parsed.protocol !== 'https:') {
       return reject(new Error('دانلود تنها از طریق پروتکل امن HTTPS مجاز است'));
@@ -2212,9 +2275,9 @@ function downloadFile(url, dest, progressCb, redirects = 0) {
       let done = 0;
       const ws = fs.createWriteStream(dest);
       const fail = (err) => {
-        try { res.destroy(); } catch {}
-        try { ws.destroy(); } catch {}
-        try { if (fs.existsSync(dest)) fs.rmSync(dest, { force: true }); } catch {}
+        try { res.destroy(); } catch { }
+        try { ws.destroy(); } catch { }
+        try { if (fs.existsSync(dest)) fs.rmSync(dest, { force: true }); } catch { }
         reject(err);
       };
       res.on('data', (chunk) => {
@@ -2233,7 +2296,7 @@ function downloadFile(url, dest, progressCb, redirects = 0) {
     });
     req.on('timeout', () => req.destroy(new Error('اتمام مهلت اتصال به سرور دانلود')));
     req.on('error', (err) => {
-      try { if (fs.existsSync(dest)) fs.rmSync(dest, { force: true }); } catch {}
+      try { if (fs.existsSync(dest)) fs.rmSync(dest, { force: true }); } catch { }
       reject(err);
     });
   });
@@ -2288,7 +2351,7 @@ async function downloadChromium(progressCb, force = false) {
       if (x64Asset && x64Asset.browser_download_url) {
         candidateUrls.unshift(x64Asset.browser_download_url);
       }
-    } catch (_) {}
+    } catch (_) { }
 
     let downloadSuccess = false;
     let lastError = null;
@@ -2302,7 +2365,7 @@ async function downloadChromium(progressCb, force = false) {
         }
       } catch (dlErr) {
         lastError = dlErr;
-        try { if (fs.existsSync(tmpZip)) fs.rmSync(tmpZip, { force: true }); } catch (_) {}
+        try { if (fs.existsSync(tmpZip)) fs.rmSync(tmpZip, { force: true }); } catch (_) { }
       }
     }
 
@@ -2311,7 +2374,7 @@ async function downloadChromium(progressCb, force = false) {
     }
 
     progressCb({ status: 'extracting', percent: 100 });
-    try { if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try { if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { }
     fs.mkdirSync(tmpDir, { recursive: true });
     await extractZip(tmpZip, tmpDir);
 
@@ -2327,9 +2390,9 @@ async function downloadChromium(progressCb, force = false) {
               const found = findChromeDir(full);
               if (found) return found;
             }
-          } catch {}
+          } catch { }
         }
-      } catch {}
+      } catch { }
       return null;
     }
 
@@ -2341,14 +2404,14 @@ async function downloadChromium(progressCb, force = false) {
       throw new Error('مسیر فایل‌های استخراج‌شده نامعتبر است');
     }
 
-    try { if (fs.existsSync(CHROMIUM_DIR)) fs.rmSync(CHROMIUM_DIR, { recursive: true, force: true }); } catch {}
+    try { if (fs.existsSync(CHROMIUM_DIR)) fs.rmSync(CHROMIUM_DIR, { recursive: true, force: true }); } catch { }
     try {
       fs.renameSync(inner, CHROMIUM_DIR);
     } catch (_) {
       fs.cpSync(inner, CHROMIUM_DIR, { recursive: true, force: true });
     }
     if (version) {
-      try { fs.writeFileSync(CHROMIUM_VERSION_FILE, version, 'utf8'); } catch {}
+      try { fs.writeFileSync(CHROMIUM_VERSION_FILE, version, 'utf8'); } catch { }
     }
     if (!fs.existsSync(CHROMIUM_EXE)) throw new Error('نصب کرومیوم ناقص ماند');
     return { ok: true, version };
@@ -2356,8 +2419,8 @@ async function downloadChromium(progressCb, force = false) {
     return { ok: false, error: String((err && err.message) || err) };
   } finally {
     downloadInProgress = false;
-    try { if (fs.existsSync(tmpZip)) fs.rmSync(tmpZip, { force: true }); } catch {}
-    try { if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try { if (fs.existsSync(tmpZip)) fs.rmSync(tmpZip, { force: true }); } catch { }
+    try { if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { }
   }
 }
 
@@ -2480,7 +2543,7 @@ if (app && typeof app.requestSingleInstanceLock === 'function') {
     });
 
     app.on('before-quit', () => {
-      try { stopAllSync(); } catch {}
+      try { stopAllSync(); } catch { }
       cleanStaleSessions();
     });
 
@@ -2569,7 +2632,7 @@ if (ipcMain && typeof ipcMain.handle === 'function') {
       }
       const legacy = path.join(LEGACY_PROFILES_DIR, pid);
       if (fs.existsSync(legacy)) safeRmSessionDir(legacy);
-    } catch {}
+    } catch { }
     return true;
   });
 
@@ -2584,539 +2647,541 @@ if (ipcMain && typeof ipcMain.handle === 'function') {
       id: 'p' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
       name: cleanName(p.name + ' (کپی)'),
       color: cleanColor(p.color),
-    startupUrl: cleanStartupUrl(p.startupUrl),
-    proxy: p.proxy ? JSON.parse(JSON.stringify(p.proxy)) : null,
-    fingerprint: generateSmartFingerprint(p.fingerprint ? {
-      os: p.fingerprint.os,
-      timezone: p.fingerprint.timezone,
-      language: p.fingerprint.language,
-      captchaSafe: p.fingerprint.captchaSafe !== false,
-      webrtcPolicy: p.fingerprint.webrtcPolicy
-    } : {}),
-    saveData: p.saveData !== false,
-    tags: Array.isArray(p.tags) ? [...p.tags] : [],
-    notes: cleanNotes(p.notes),
-    createdAt: Date.now(),
-    lastLaunched: null
-  };
-  profiles.unshift(clone);
-  saveProfiles(profiles);
-  return clone;
-});
-
-function countryCodeToFlag(code) {
-  if (!code || typeof code !== 'string' || code.length !== 2) return '🌐';
-  const c = code.toUpperCase();
-  if (!/^[A-Z]{2}$/.test(c)) return '🌐';
-  const first = 127397 + c.charCodeAt(0);
-  const second = 127397 + c.charCodeAt(1);
-  return String.fromCodePoint(first, second);
-}
-
-function isPrivateIp(ip) {
-  if (!ip || typeof ip !== 'string') return false;
-  const s = ip.trim();
-  if (s === '127.0.0.1' || s === 'localhost' || s === '::1') return true;
-  if (s.startsWith('10.') || s.startsWith('192.168.')) return true;
-  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(s)) return true;
-  return false;
-}
-
-const ipGeoCache = new Map();
-
-function resolveFallbackIpCountry(ip) {
-  // HTTPS-only fallback (CWE-319): the legacy cleartext geo endpoint was
-  // removed. The fallback below uses a TLS-capable free-tier geo API.
-  return new Promise((resolve) => {
-    const done = (res) => resolve(res || { country: 'Unknown', countryCode: '', flag: '🌐' });
-    const timer = setTimeout(() => {
-      done({ country: 'Unknown', countryCode: '', flag: '🌐' });
-    }, 3000);
-
-    let req;
-    try {
-      req = https.get(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
-        timeout: 2500,
-        headers: { 'User-Agent': 'PrivateBrowserPro/1.0' }
-      }, (res) => {
-        if (res.statusCode !== 200) {
-          res.resume();
-          clearTimeout(timer);
-          return done({ country: 'Unknown', countryCode: '', flag: '🌐' });
-        }
-        let body = '';
-        res.on('data', chunk => body += chunk);
-        res.on('end', () => {
-          clearTimeout(timer);
-          try {
-            const data = JSON.parse(body);
-            if (data && data.country_name && !data.error) {
-              const country = data.country_name || 'Unknown';
-              const countryCode = (data.country_code || '').toUpperCase();
-              const flag = countryCodeToFlag(countryCode) || '🌐';
-              return done({ country, countryCode, flag });
-            }
-          } catch {}
-          done({ country: 'Unknown', countryCode: '', flag: '🌐' });
-        });
-      });
-    } catch {
-      clearTimeout(timer);
-      return done({ country: 'Unknown', countryCode: '', flag: '🌐' });
-    }
-
-    req.on('error', () => {
-      clearTimeout(timer);
-      done({ country: 'Unknown', countryCode: '', flag: '🌐' });
-    });
-
-    req.on('timeout', () => {
-      req.destroy();
-      clearTimeout(timer);
-      done({ country: 'Unknown', countryCode: '', flag: '🌐' });
-    });
-  });
-}
-
-function resolveIpCountry(ip) {
-  if (!ip || typeof ip !== 'string') return Promise.resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
-  const clean = ip.trim();
-  if (isPrivateIp(clean)) {
-    return Promise.resolve({ country: 'Local Network', countryCode: 'LAN', flag: '🏠' });
-  }
-  const cached = ipGeoCache.get(clean);
-  if (cached && (Date.now() - cached.ts < 3600000)) {
-    return Promise.resolve({ country: cached.country, countryCode: cached.countryCode, flag: cached.flag });
-  }
-
-  return new Promise((resolve) => {
-    let finished = false;
-    const finish = (res) => {
-      if (finished) return;
-      finished = true;
-      ipGeoCache.set(clean, { ...res, ts: Date.now() });
-      resolve(res);
+      startupUrl: cleanStartupUrl(p.startupUrl),
+      proxy: p.proxy ? JSON.parse(JSON.stringify(p.proxy)) : null,
+      fingerprint: generateSmartFingerprint(p.fingerprint ? {
+        os: p.fingerprint.os,
+        timezone: p.fingerprint.timezone,
+        language: p.fingerprint.language,
+        captchaSafe: p.fingerprint.captchaSafe !== false,
+        webrtcPolicy: p.fingerprint.webrtcPolicy
+      } : {}),
+      saveData: p.saveData !== false,
+      tags: Array.isArray(p.tags) ? [...p.tags] : [],
+      notes: cleanNotes(p.notes),
+      createdAt: Date.now(),
+      lastLaunched: null
     };
-
-    const timer = setTimeout(() => {
-      resolveFallbackIpCountry(clean).then(finish);
-    }, 4000);
-
-    const req = https.get(`https://ipwho.is/${encodeURIComponent(clean)}`, {
-      timeout: 3500,
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-    }, (res) => {
-      let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => {
-        clearTimeout(timer);
-        try {
-          const data = JSON.parse(body);
-          if (data && data.success) {
-            const country = data.country || 'Unknown';
-            const countryCode = (data.country_code || '').toUpperCase();
-            const flag = (data.flag && data.flag.emoji) ? data.flag.emoji : (countryCodeToFlag(countryCode) || '🌐');
-            return finish({ country, countryCode, flag });
-          }
-        } catch {}
-        resolveFallbackIpCountry(clean).then(finish);
-      });
-    });
-
-    req.on('error', () => {
-      clearTimeout(timer);
-      resolveFallbackIpCountry(clean).then(finish);
-    });
-
-    req.on('timeout', () => {
-      req.destroy();
-      clearTimeout(timer);
-      resolveFallbackIpCountry(clean).then(finish);
-    });
+    profiles.unshift(clone);
+    saveProfiles(profiles);
+    return clone;
   });
-}
 
-function sendSocks5TestConnect(socket, host, port) {
-  const hostBuf = Buffer.from(host, 'utf8');
-  socket.write(Buffer.concat([
-    Buffer.from([0x05, 0x01, 0x00, 0x03, hostBuf.length]),
-    hostBuf,
-    Buffer.from([(port >> 8) & 0xff, port & 0xff])
-  ]));
-}
+  function countryCodeToFlag(code) {
+    if (!code || typeof code !== 'string' || code.length !== 2) return '🌐';
+    const c = code.toUpperCase();
+    if (!/^[A-Z]{2}$/.test(c)) return '🌐';
+    const first = 127397 + c.charCodeAt(0);
+    const second = 127397 + c.charCodeAt(1);
+    return String.fromCodePoint(first, second);
+  }
 
-function testProxyConnection(p) {
-  const start = Date.now();
-  const host = p.host;
-  const port = p.port;
+  function isPrivateIp(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+    const s = ip.trim();
+    if (s === '127.0.0.1' || s === 'localhost' || s === '::1') return true;
+    if (s.startsWith('10.') || s.startsWith('192.168.')) return true;
+    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(s)) return true;
+    return false;
+  }
 
-  if (p.type === 'socks5') {
+  const ipGeoCache = new Map();
+
+  function resolveFallbackIpCountry(ip) {
+    // HTTPS-only fallback (CWE-319): the legacy cleartext geo endpoint was
+    // removed. The fallback below uses a TLS-capable free-tier geo API.
     return new Promise((resolve) => {
-      let resolved = false;
-      const finish = (res) => {
-        if (resolved) return;
-        resolved = true;
-        resolve(res);
-      };
+      const done = (res) => resolve(res || { country: 'Unknown', countryCode: '', flag: '🌐' });
+      const timer = setTimeout(() => {
+        done({ country: 'Unknown', countryCode: '', flag: '🌐' });
+      }, 3000);
 
-      const socket = net.createConnection({ host, port, timeout: 8000 }, () => {
-        const hasAuth = !!(p.username && p.password);
-        socket.write(hasAuth ? Buffer.from([0x05, 0x01, 0x02]) : Buffer.from([0x05, 0x01, 0x00]));
-      });
-
-      socket.setTimeout(8000);
-      let stage = 'greeting';
-      let httpBuf = '';
-
-      socket.on('data', async (chunk) => {
-        try {
-          if (stage === 'greeting') {
-            if (chunk[0] !== 0x05) {
-              socket.destroy();
-              return finish({ ok: false, error: 'سرور انتخابی پروتکل معتبر SOCKS5 نیست.' });
-            }
-            const method = chunk[1];
-            if (method === 0xFF) {
-              socket.destroy();
-              return finish({ ok: false, error: 'پروکسی نیازمند نام کاربری و کلمه عبور است.' });
-            }
-            if (method === 0x02) {
-              const u = Buffer.from(p.username || '', 'utf8');
-              const pass = Buffer.from(p.password || '', 'utf8');
-              const authBuf = Buffer.concat([
-                Buffer.from([0x01, u.length]),
-                u,
-                Buffer.from([pass.length]),
-                pass
-              ]);
-              stage = 'auth';
-              socket.write(authBuf);
-              return;
-            }
-            stage = 'connect';
-            sendSocks5TestConnect(socket, 'api.ipify.org', 80);
-          } else if (stage === 'auth') {
-            if (chunk[1] !== 0x00) {
-              socket.destroy();
-              return finish({ ok: false, error: 'نام کاربری یا کلمه عبور پروکسی SOCKS5 اشتباه است.' });
-            }
-            stage = 'connect';
-            sendSocks5TestConnect(socket, 'api.ipify.org', 80);
-          } else if (stage === 'connect') {
-            if (chunk[1] !== 0x00) {
-              const errMap = {
-                0x01: 'خطای کلی در سرور پروکسی',
-                0x02: 'ارتباط توسط قوانین پروکسی رد شد',
-                0x03: 'شبکه مقصد در دسترس نیست (Network unreachable)',
-                0x04: 'میزبان مقصد در دسترس نیست (Host unreachable)',
-                0x05: 'اتصال توسط مقصد رد شد (Connection refused)',
-                0x06: 'مدت زمان اتصال منقضی شد (TTL expired)'
-              };
-              socket.destroy();
-              return finish({
-                ok: false,
-                error: 'پروکسی به اینترنت دسترسی ندارد: ' + (errMap[chunk[1]] || ('کد ' + chunk[1]))
-              });
-            }
-            stage = 'http';
-            httpBuf = '';
-            socket.write('GET /?format=json HTTP/1.1\r\nHost: api.ipify.org\r\nUser-Agent: curl/7.68.0\r\nConnection: close\r\n\r\n');
-          } else if (stage === 'http') {
-            httpBuf += chunk.toString('utf8');
-            const idx = httpBuf.indexOf('{');
-            const endIdx = httpBuf.lastIndexOf('}');
-            if (idx !== -1 && endIdx > idx) {
-              const latency = Date.now() - start;
-              socket.destroy();
-              let extIp = host;
-              try {
-                const parsed = JSON.parse(httpBuf.slice(idx, endIdx + 1));
-                if (parsed && parsed.ip) extIp = parsed.ip;
-              } catch {}
-              const geo = await resolveIpCountry(extIp);
-              finish({ ok: true, latencyMs: latency, type: 'socks5', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag });
-            }
+      let req;
+      try {
+        req = https.get(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
+          timeout: 2500,
+          headers: { 'User-Agent': 'PrivateBrowserPro/1.0' }
+        }, (res) => {
+          if (res.statusCode !== 200) {
+            res.resume();
+            clearTimeout(timer);
+            return done({ country: 'Unknown', countryCode: '', flag: '🌐' });
           }
-        } catch (err) {
-          socket.destroy();
-          finish({ ok: false, error: 'خطا در خواندن پاسخ پروکسی: ' + err.message });
-        }
-      });
-
-      socket.on('close', async () => {
-        if (stage === 'http' && httpBuf && !resolved) {
-          const latency = Date.now() - start;
-          let extIp = host;
-          try {
-            const idx = httpBuf.indexOf('{');
-            const endIdx = httpBuf.lastIndexOf('}');
-            if (idx !== -1 && endIdx > idx) {
-              const parsed = JSON.parse(httpBuf.slice(idx, endIdx + 1));
-              if (parsed && parsed.ip) extIp = parsed.ip;
-            }
-          } catch {}
-          const geo = await resolveIpCountry(extIp);
-          finish({ ok: true, latencyMs: latency, type: 'socks5', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag });
-        }
-      });
-
-      socket.on('timeout', () => {
-        socket.destroy();
-        finish({ ok: false, error: 'عدم پاسخگویی اینترنت از طریق پروکسی در ۸ ثانیه (Timeout)' });
-      });
-
-      socket.on('error', (err) => {
-        finish({
-          ok: false,
-          error: 'خطا در اتصال به پورت پروکسی: ' + (err.code === 'ECONNREFUSED' ? 'پورت پروکسی بسته است یا برنامه VPN/V2Ray فعال نیست.' : err.message)
+          let body = '';
+          res.on('data', chunk => body += chunk);
+          res.on('end', () => {
+            clearTimeout(timer);
+            try {
+              const data = JSON.parse(body);
+              if (data && data.country_name && !data.error) {
+                const country = data.country_name || 'Unknown';
+                const countryCode = (data.country_code || '').toUpperCase();
+                const flag = countryCodeToFlag(countryCode) || '🌐';
+                return done({ country, countryCode, flag });
+              }
+            } catch { }
+            done({ country: 'Unknown', countryCode: '', flag: '🌐' });
+          });
         });
-      });
-    });
-  } else {
-    // HTTP Proxy test
-    return new Promise((resolve) => {
-      let resolved = false;
-      const finish = (res) => {
-        if (resolved) return;
-        resolved = true;
-        resolve(res);
-      };
-
-      const headers = { 'Host': 'api.ipify.org', 'User-Agent': 'Mozilla/5.0' };
-      if (p.username && p.password) {
-        headers['Proxy-Authorization'] = 'Basic ' + Buffer.from(`${p.username}:${p.password}`).toString('base64');
+      } catch {
+        clearTimeout(timer);
+        return done({ country: 'Unknown', countryCode: '', flag: '🌐' });
       }
 
-      const req = http.request({
-        host,
-        port,
-        path: 'http://api.ipify.org/?format=json',
-        method: 'GET',
-        headers,
-        timeout: 8000
-      }, (res) => {
-        if (res.statusCode === 407) {
-          return finish({ ok: false, error: 'نام کاربری یا کلمه عبور پروکسی اشتباه است (Error 407: Proxy Authentication Required)' });
-        }
-        if (res.statusCode >= 500) {
-          return finish({ ok: false, error: 'خطای سرور پروکسی در دسترسی به اینترنت (کد ' + res.statusCode + ')' });
-        }
-        let body = '';
-        res.on('data', chunk => body += chunk);
-        res.on('end', async () => {
-          const latency = Date.now() - start;
-          let extIp = host;
-          try {
-            const data = JSON.parse(body);
-            if (data && data.ip) extIp = data.ip;
-          } catch {}
-          const geo = await resolveIpCountry(extIp);
-          finish({ ok: true, latencyMs: latency, type: 'http', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag });
-        });
+      req.on('error', () => {
+        clearTimeout(timer);
+        done({ country: 'Unknown', countryCode: '', flag: '🌐' });
       });
 
       req.on('timeout', () => {
         req.destroy();
-        finish({ ok: false, error: 'عدم دریافت پاسخ اینترنت از طریق پروکسی در ۸ ثانیه (Timeout)' });
+        clearTimeout(timer);
+        done({ country: 'Unknown', countryCode: '', flag: '🌐' });
       });
-
-      req.on('error', (err) => {
-        finish({
-          ok: false,
-          error: 'خطا در اتصال به پروکسی: ' + (err.code === 'ECONNREFUSED' ? 'پورت پروکسی بسته است.' : (err.message || err))
-        });
-      });
-
-      req.end();
     });
   }
-}
 
-ipcMain.handle('proxy:test', async (e, proxyConfig) => {
-  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
-  const p = cleanProxy(proxyConfig);
-  if (!p) return { ok: false, error: 'مشخصات پروکسی ناقص است (آدرس یا پورت خالی است).' };
-  return testProxyConnection(p);
-});
+  function resolveIpCountry(ip) {
+    if (!ip || typeof ip !== 'string') return Promise.resolve({ country: 'Unknown', countryCode: '', flag: '🌐' });
+    const clean = ip.trim();
+    if (isPrivateIp(clean)) {
+      return Promise.resolve({ country: 'Local Network', countryCode: 'LAN', flag: '🏠' });
+    }
+    const cached = ipGeoCache.get(clean);
+    if (cached && (Date.now() - cached.ts < 3600000)) {
+      return Promise.resolve({ country: cached.country, countryCode: cached.countryCode, flag: cached.flag, timezone: cached.timezone || null, city: cached.city || '' });
+    }
 
-ipcMain.handle('proxies:list', (e) => {
-  if (!isTrustedSender(e)) return [];
-  return loadProxies();
-});
+    return new Promise((resolve) => {
+      let finished = false;
+      const finish = (res) => {
+        if (finished) return;
+        finished = true;
+        ipGeoCache.set(clean, { ...res, ts: Date.now() });
+        resolve(res);
+      };
 
-ipcMain.handle('proxies:save', (e, list) => {
-  if (!isTrustedSender(e)) return false;
-  if (!Array.isArray(list)) return false;
-  const sanitized = list.slice(0, 1000).map(cleanProxy).filter(Boolean);
-  saveProxies(sanitized);
-  return true;
-});
+      const timer = setTimeout(() => {
+        resolveFallbackIpCountry(clean).then(finish);
+      }, 4000);
 
-ipcMain.handle('proxies:test', async (e, proxyConfig) => {
-  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
-  const p = cleanProxy(proxyConfig);
-  if (!p) return { ok: false, error: 'مشخصات پروکسی ناقص است (آدرس یا پورت خالی است).' };
-  return testProxyConnection(p);
-});
-
-ipcMain.handle('profiles:wipe', (e, id) => {
-  if (!isTrustedSender(e)) return false;
-  const pid = String(id || '');
-  if (!isValidProfileId(pid)) return false;
-  return wipeProfile(pid);
-});
-
-ipcMain.handle('profiles:wipeAll', (e) => {
-  if (!isTrustedSender(e)) return false;
-  return wipeAllSessions();
-});
-
-ipcMain.handle('profiles:randomizeFingerprint', (e, id) => {
-  if (!isTrustedSender(e)) return null;
-  const pid = String(id || '');
-  if (!isValidProfileId(pid)) return null;
-  const profiles = loadProfiles();
-  const idx = profiles.findIndex((x) => x.id === pid);
-  if (idx === -1) return null;
-  profiles[idx].fingerprint = generateSmartFingerprint();
-  saveProfiles(profiles);
-  return profiles[idx];
-});
-
-ipcMain.handle('profiles:launch', async (e, id) => {
-  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
-  const pid = String(id || '');
-  if (!isValidProfileId(pid)) return { ok: false, error: 'INVALID_ID' };
-  const profiles = loadProfiles();
-  const p = profiles.find((x) => x.id === pid);
-  if (!p) return { ok: false, error: 'NOT_FOUND' };
-  const result = await launchProfile(p);
-  if (result.ok) {
-    p.lastLaunched = Date.now();
-    try { saveProfiles(profiles); } catch {}
-  }
-  return result;
-});
-
-ipcMain.handle('profiles:stop', (e, id) => {
-  if (!isTrustedSender(e)) return { stopped: 0 };
-  const pid = String(id || '');
-  if (!isValidProfileId(pid)) return { stopped: 0 };
-  return { stopped: stopProfile(pid) };
-});
-
-ipcMain.handle('status:running', (e) => {
-  if (!isTrustedSender(e)) return { running: [], counts: {} };
-  return runningSnapshot();
-});
-
-ipcMain.handle('status:chromium', (e) => {
-  if (!isTrustedSender(e)) return { found: false };
-  const hasDownloaded = fs.existsSync(CHROMIUM_EXE);
-  return {
-    found: hasDownloaded,
-    path: hasDownloaded ? CHROMIUM_EXE : null,
-    name: 'jozmoz',
-    isDownloadedChromium: hasDownloaded,
-    isEdge: false
-  };
-});
-
-ipcMain.handle('status:dataFolder', (e) => {
-  if (!isTrustedSender(e)) return '';
-  return DATA_DIR;
-});
-
-ipcMain.handle('status:openDataFolder', (e) => {
-  if (!isTrustedSender(e)) return;
-  shell.openPath(DATA_DIR);
-});
-
-ipcMain.handle('shell:openExternal', async (e, url) => {
-  if (!isTrustedSender(e)) return;
-  if (isSafeExternalUrl(url)) {
-    return shell.openExternal(url);
-  }
-});
-
-ipcMain.handle('chromium:download', async (e) => {
-  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
-  const progress = (p) => {
-    try {
-      if (!e.sender.isDestroyed()) e.sender.send('chromium:progress', p);
-    } catch {}
-  };
-  try {
-    return await downloadChromium(progress, true);
-  } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
-  }
-});
-
-ipcMain.handle('ip:detect', async (e) => {
-  if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
-  return new Promise((resolve) => {
-    const fetchHttps = (url, parseFn, onFail) => {
-      const req = https.get(url, { headers: { 'User-Agent': 'PrivateBrowserPro/1.0' }, timeout: 6000 }, (res) => {
-        if (res.statusCode !== 200) {
-          return onFail(new Error(`HTTP ${res.statusCode}`));
-        }
-        let d = '';
-        res.on('data', (c) => { d += c; });
+      const req = https.get(`https://ipwho.is/${encodeURIComponent(clean)}`, {
+        timeout: 3500,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+      }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
         res.on('end', () => {
+          clearTimeout(timer);
           try {
-            const info = JSON.parse(d);
-            const parsed = parseFn(info);
-            if (parsed) return resolve({ ok: true, ...parsed });
-            onFail(new Error('Invalid response data'));
-          } catch (err) {
-            onFail(err);
-          }
+            const data = JSON.parse(body);
+            if (data && data.success) {
+              const country = data.country || 'Unknown';
+              const countryCode = (data.country_code || '').toUpperCase();
+              const flag = (data.flag && data.flag.emoji) ? data.flag.emoji : (countryCodeToFlag(countryCode) || '🌐');
+              const timezone = (data.timezone && data.timezone.id) ? data.timezone.id : null;
+              const city = data.city || '';
+              return finish({ country, countryCode, flag, timezone, city });
+            }
+          } catch { }
+          resolveFallbackIpCountry(clean).then(finish);
         });
       });
-      req.on('error', onFail);
-      req.on('timeout', () => { req.destroy(); onFail(new Error('TIMEOUT')); });
-    };
 
-    fetchHttps(
-      'https://ipwho.is/',
-      (info) => {
-        if (info && info.success) {
-          return {
-            ip: info.ip,
-            country: info.country,
-            countryCode: info.country_code,
-            city: info.city,
-            timezone: info.timezone ? info.timezone.id : null,
-            isp: info.connection ? info.connection.isp : null
-          };
-        }
-        return null;
-      },
-      () => {
-        fetchHttps(
-          'https://ipapi.co/json/',
-          (info) => {
-            if (info && info.ip && !info.error) {
-              return {
-                ip: info.ip,
-                country: info.country_name,
-                countryCode: info.country_code,
-                city: info.city,
-                timezone: info.timezone,
-                isp: info.org
-              };
+      req.on('error', () => {
+        clearTimeout(timer);
+        resolveFallbackIpCountry(clean).then(finish);
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        clearTimeout(timer);
+        resolveFallbackIpCountry(clean).then(finish);
+      });
+    });
+  }
+
+  function sendSocks5TestConnect(socket, host, port) {
+    const hostBuf = Buffer.from(host, 'utf8');
+    socket.write(Buffer.concat([
+      Buffer.from([0x05, 0x01, 0x00, 0x03, hostBuf.length]),
+      hostBuf,
+      Buffer.from([(port >> 8) & 0xff, port & 0xff])
+    ]));
+  }
+
+  function testProxyConnection(p) {
+    const start = Date.now();
+    const host = p.host;
+    const port = p.port;
+
+    if (p.type === 'socks5') {
+      return new Promise((resolve) => {
+        let resolved = false;
+        const finish = (res) => {
+          if (resolved) return;
+          resolved = true;
+          resolve(res);
+        };
+
+        const socket = net.createConnection({ host, port, timeout: 8000 }, () => {
+          const hasAuth = !!(p.username && p.password);
+          socket.write(hasAuth ? Buffer.from([0x05, 0x01, 0x02]) : Buffer.from([0x05, 0x01, 0x00]));
+        });
+
+        socket.setTimeout(8000);
+        let stage = 'greeting';
+        let httpBuf = '';
+
+        socket.on('data', async (chunk) => {
+          try {
+            if (stage === 'greeting') {
+              if (chunk[0] !== 0x05) {
+                socket.destroy();
+                return finish({ ok: false, error: 'سرور انتخابی پروتکل معتبر SOCKS5 نیست.' });
+              }
+              const method = chunk[1];
+              if (method === 0xFF) {
+                socket.destroy();
+                return finish({ ok: false, error: 'پروکسی نیازمند نام کاربری و کلمه عبور است.' });
+              }
+              if (method === 0x02) {
+                const u = Buffer.from(p.username || '', 'utf8');
+                const pass = Buffer.from(p.password || '', 'utf8');
+                const authBuf = Buffer.concat([
+                  Buffer.from([0x01, u.length]),
+                  u,
+                  Buffer.from([pass.length]),
+                  pass
+                ]);
+                stage = 'auth';
+                socket.write(authBuf);
+                return;
+              }
+              stage = 'connect';
+              sendSocks5TestConnect(socket, 'api.ipify.org', 80);
+            } else if (stage === 'auth') {
+              if (chunk[1] !== 0x00) {
+                socket.destroy();
+                return finish({ ok: false, error: 'نام کاربری یا کلمه عبور پروکسی SOCKS5 اشتباه است.' });
+              }
+              stage = 'connect';
+              sendSocks5TestConnect(socket, 'api.ipify.org', 80);
+            } else if (stage === 'connect') {
+              if (chunk[1] !== 0x00) {
+                const errMap = {
+                  0x01: 'خطای کلی در سرور پروکسی',
+                  0x02: 'ارتباط توسط قوانین پروکسی رد شد',
+                  0x03: 'شبکه مقصد در دسترس نیست (Network unreachable)',
+                  0x04: 'میزبان مقصد در دسترس نیست (Host unreachable)',
+                  0x05: 'اتصال توسط مقصد رد شد (Connection refused)',
+                  0x06: 'مدت زمان اتصال منقضی شد (TTL expired)'
+                };
+                socket.destroy();
+                return finish({
+                  ok: false,
+                  error: 'پروکسی به اینترنت دسترسی ندارد: ' + (errMap[chunk[1]] || ('کد ' + chunk[1]))
+                });
+              }
+              stage = 'http';
+              httpBuf = '';
+              socket.write('GET /?format=json HTTP/1.1\r\nHost: api.ipify.org\r\nUser-Agent: curl/7.68.0\r\nConnection: close\r\n\r\n');
+            } else if (stage === 'http') {
+              httpBuf += chunk.toString('utf8');
+              const idx = httpBuf.indexOf('{');
+              const endIdx = httpBuf.lastIndexOf('}');
+              if (idx !== -1 && endIdx > idx) {
+                const latency = Date.now() - start;
+                socket.destroy();
+                let extIp = host;
+                try {
+                  const parsed = JSON.parse(httpBuf.slice(idx, endIdx + 1));
+                  if (parsed && parsed.ip) extIp = parsed.ip;
+                } catch { }
+                const geo = await resolveIpCountry(extIp);
+                finish({ ok: true, latencyMs: latency, type: 'socks5', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag, timezone: geo.timezone || null, city: geo.city || '' });
+              }
             }
-            return null;
-          },
-          (err) => {
-            resolve({ ok: false, error: (err && err.message) || 'FAILED' });
+          } catch (err) {
+            socket.destroy();
+            finish({ ok: false, error: 'خطا در خواندن پاسخ پروکسی: ' + err.message });
           }
-        );
-      }
-    );
+        });
+
+        socket.on('close', async () => {
+          if (stage === 'http' && httpBuf && !resolved) {
+            const latency = Date.now() - start;
+            let extIp = host;
+            try {
+              const idx = httpBuf.indexOf('{');
+              const endIdx = httpBuf.lastIndexOf('}');
+              if (idx !== -1 && endIdx > idx) {
+                const parsed = JSON.parse(httpBuf.slice(idx, endIdx + 1));
+                if (parsed && parsed.ip) extIp = parsed.ip;
+              }
+            } catch { }
+            const geo = await resolveIpCountry(extIp);
+            finish({ ok: true, latencyMs: latency, type: 'socks5', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag, timezone: geo.timezone || null, city: geo.city || '' });
+          }
+        });
+
+        socket.on('timeout', () => {
+          socket.destroy();
+          finish({ ok: false, error: 'عدم پاسخگویی اینترنت از طریق پروکسی در ۸ ثانیه (Timeout)' });
+        });
+
+        socket.on('error', (err) => {
+          finish({
+            ok: false,
+            error: 'خطا در اتصال به پورت پروکسی: ' + (err.code === 'ECONNREFUSED' ? 'پورت پروکسی بسته است یا برنامه VPN/V2Ray فعال نیست.' : err.message)
+          });
+        });
+      });
+    } else {
+      // HTTP Proxy test
+      return new Promise((resolve) => {
+        let resolved = false;
+        const finish = (res) => {
+          if (resolved) return;
+          resolved = true;
+          resolve(res);
+        };
+
+        const headers = { 'Host': 'api.ipify.org', 'User-Agent': 'Mozilla/5.0' };
+        if (p.username && p.password) {
+          headers['Proxy-Authorization'] = 'Basic ' + Buffer.from(`${p.username}:${p.password}`).toString('base64');
+        }
+
+        const req = http.request({
+          host,
+          port,
+          path: 'http://api.ipify.org/?format=json',
+          method: 'GET',
+          headers,
+          timeout: 8000
+        }, (res) => {
+          if (res.statusCode === 407) {
+            return finish({ ok: false, error: 'نام کاربری یا کلمه عبور پروکسی اشتباه است (Error 407: Proxy Authentication Required)' });
+          }
+          if (res.statusCode >= 500) {
+            return finish({ ok: false, error: 'خطای سرور پروکسی در دسترسی به اینترنت (کد ' + res.statusCode + ')' });
+          }
+          let body = '';
+          res.on('data', chunk => body += chunk);
+          res.on('end', async () => {
+            const latency = Date.now() - start;
+            let extIp = host;
+            try {
+              const data = JSON.parse(body);
+              if (data && data.ip) extIp = data.ip;
+            } catch { }
+            const geo = await resolveIpCountry(extIp);
+            finish({ ok: true, latencyMs: latency, type: 'http', ip: extIp, country: geo.country, countryCode: geo.countryCode, flag: geo.flag, timezone: geo.timezone || null, city: geo.city || '' });
+          });
+        });
+
+        req.on('timeout', () => {
+          req.destroy();
+          finish({ ok: false, error: 'عدم دریافت پاسخ اینترنت از طریق پروکسی در ۸ ثانیه (Timeout)' });
+        });
+
+        req.on('error', (err) => {
+          finish({
+            ok: false,
+            error: 'خطا در اتصال به پروکسی: ' + (err.code === 'ECONNREFUSED' ? 'پورت پروکسی بسته است.' : (err.message || err))
+          });
+        });
+
+        req.end();
+      });
+    }
+  }
+
+  ipcMain.handle('proxy:test', async (e, proxyConfig) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
+    const p = cleanProxy(proxyConfig);
+    if (!p) return { ok: false, error: 'مشخصات پروکسی ناقص است (آدرس یا پورت خالی است).' };
+    return testProxyConnection(p);
   });
-});
+
+  ipcMain.handle('proxies:list', (e) => {
+    if (!isTrustedSender(e)) return [];
+    return loadProxies();
+  });
+
+  ipcMain.handle('proxies:save', (e, list) => {
+    if (!isTrustedSender(e)) return false;
+    if (!Array.isArray(list)) return false;
+    const sanitized = list.slice(0, 1000).map(cleanProxy).filter(Boolean);
+    saveProxies(sanitized);
+    return true;
+  });
+
+  ipcMain.handle('proxies:test', async (e, proxyConfig) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
+    const p = cleanProxy(proxyConfig);
+    if (!p) return { ok: false, error: 'مشخصات پروکسی ناقص است (آدرس یا پورت خالی است).' };
+    return testProxyConnection(p);
+  });
+
+  ipcMain.handle('profiles:wipe', (e, id) => {
+    if (!isTrustedSender(e)) return false;
+    const pid = String(id || '');
+    if (!isValidProfileId(pid)) return false;
+    return wipeProfile(pid);
+  });
+
+  ipcMain.handle('profiles:wipeAll', (e) => {
+    if (!isTrustedSender(e)) return false;
+    return wipeAllSessions();
+  });
+
+  ipcMain.handle('profiles:randomizeFingerprint', (e, id) => {
+    if (!isTrustedSender(e)) return null;
+    const pid = String(id || '');
+    if (!isValidProfileId(pid)) return null;
+    const profiles = loadProfiles();
+    const idx = profiles.findIndex((x) => x.id === pid);
+    if (idx === -1) return null;
+    profiles[idx].fingerprint = generateSmartFingerprint();
+    saveProfiles(profiles);
+    return profiles[idx];
+  });
+
+  ipcMain.handle('profiles:launch', async (e, id) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
+    const pid = String(id || '');
+    if (!isValidProfileId(pid)) return { ok: false, error: 'INVALID_ID' };
+    const profiles = loadProfiles();
+    const p = profiles.find((x) => x.id === pid);
+    if (!p) return { ok: false, error: 'NOT_FOUND' };
+    const result = await launchProfile(p);
+    if (result.ok) {
+      p.lastLaunched = Date.now();
+      try { saveProfiles(profiles); } catch { }
+    }
+    return result;
+  });
+
+  ipcMain.handle('profiles:stop', (e, id) => {
+    if (!isTrustedSender(e)) return { stopped: 0 };
+    const pid = String(id || '');
+    if (!isValidProfileId(pid)) return { stopped: 0 };
+    return { stopped: stopProfile(pid) };
+  });
+
+  ipcMain.handle('status:running', (e) => {
+    if (!isTrustedSender(e)) return { running: [], counts: {} };
+    return runningSnapshot();
+  });
+
+  ipcMain.handle('status:chromium', (e) => {
+    if (!isTrustedSender(e)) return { found: false };
+    const hasDownloaded = fs.existsSync(CHROMIUM_EXE);
+    return {
+      found: hasDownloaded,
+      path: hasDownloaded ? CHROMIUM_EXE : null,
+      name: 'jozmoz',
+      isDownloadedChromium: hasDownloaded,
+      isEdge: false
+    };
+  });
+
+  ipcMain.handle('status:dataFolder', (e) => {
+    if (!isTrustedSender(e)) return '';
+    return DATA_DIR;
+  });
+
+  ipcMain.handle('status:openDataFolder', (e) => {
+    if (!isTrustedSender(e)) return;
+    shell.openPath(DATA_DIR);
+  });
+
+  ipcMain.handle('shell:openExternal', async (e, url) => {
+    if (!isTrustedSender(e)) return;
+    if (isSafeExternalUrl(url)) {
+      return shell.openExternal(url);
+    }
+  });
+
+  ipcMain.handle('chromium:download', async (e) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
+    const progress = (p) => {
+      try {
+        if (!e.sender.isDestroyed()) e.sender.send('chromium:progress', p);
+      } catch { }
+    };
+    try {
+      return await downloadChromium(progress, true);
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err) };
+    }
+  });
+
+  ipcMain.handle('ip:detect', async (e) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'UNAUTHORIZED' };
+    return new Promise((resolve) => {
+      const fetchHttps = (url, parseFn, onFail) => {
+        const req = https.get(url, { headers: { 'User-Agent': 'PrivateBrowserPro/1.0' }, timeout: 6000 }, (res) => {
+          if (res.statusCode !== 200) {
+            return onFail(new Error(`HTTP ${res.statusCode}`));
+          }
+          let d = '';
+          res.on('data', (c) => { d += c; });
+          res.on('end', () => {
+            try {
+              const info = JSON.parse(d);
+              const parsed = parseFn(info);
+              if (parsed) return resolve({ ok: true, ...parsed });
+              onFail(new Error('Invalid response data'));
+            } catch (err) {
+              onFail(err);
+            }
+          });
+        });
+        req.on('error', onFail);
+        req.on('timeout', () => { req.destroy(); onFail(new Error('TIMEOUT')); });
+      };
+
+      fetchHttps(
+        'https://ipwho.is/',
+        (info) => {
+          if (info && info.success) {
+            return {
+              ip: info.ip,
+              country: info.country,
+              countryCode: info.country_code,
+              city: info.city,
+              timezone: info.timezone ? info.timezone.id : null,
+              isp: info.connection ? info.connection.isp : null
+            };
+          }
+          return null;
+        },
+        () => {
+          fetchHttps(
+            'https://ipapi.co/json/',
+            (info) => {
+              if (info && info.ip && !info.error) {
+                return {
+                  ip: info.ip,
+                  country: info.country_name,
+                  countryCode: info.country_code,
+                  city: info.city,
+                  timezone: info.timezone,
+                  isp: info.org
+                };
+              }
+              return null;
+            },
+            (err) => {
+              resolve({ ok: false, error: (err && err.message) || 'FAILED' });
+            }
+          );
+        }
+      );
+    });
+  });
 }
 
 
